@@ -125,8 +125,12 @@ class TestBOMExplosion:
         
         result = explode_bom_iterative(independent_demand, items, bom)
         
-        # Should return empty result since no BOM structure exists
-        assert result == []
+        # Should return the independent demand item as level 0 (natural fail-safe)
+        assert len(result) == 1
+        assert result[0]['product_item'] == 'SIMPLE'
+        assert result[0]['parent_item'] == 'SIMPLE'
+        assert result[0]['child_item'] == 'SIMPLE'
+        assert result[0]['level'] == 0
     
     def test_bom_explosion_from_csv_integration(self):
         """Test CSV-based BOM explosion integration."""
@@ -189,7 +193,12 @@ class TestBOMExplosion:
         result = explode_bom_iterative(independent_demand, items, bom)
         
         # Should handle both datetime and string formats
-        assert len(result) == 2
+        # 2 level 0 items + 2 level 1 children = 4 total
+        assert len(result) == 4
+        
+        # Check level 0 items are included
+        level_0_items = [item for item in result if item['level'] == 0]
+        assert len(level_0_items) == 2
         
         # Check that dates are properly formatted in output
         for record in result:
@@ -213,13 +222,66 @@ class TestBOMExplosion:
         
         result = explode_bom_iterative(independent_demand, items, bom)
         
-        assert len(result) == 1
-        record = result[0]
+        # Should have 2 results: 1 level 0 + 1 level 1 child
+        assert len(result) == 2
+        
+        # Check level 0 (independent demand)
+        level_0_record = [r for r in result if r['level'] == 0][0]
+        assert level_0_record['parent_item'] == 'PARENT'
+        assert level_0_record['child_item'] == 'PARENT'
+        assert level_0_record['due_date'] == '2025-01-15'
+        
+        # Check level 1 (child)
+        level_1_record = [r for r in result if r['level'] == 1][0]
+        assert level_1_record['parent_item'] == 'PARENT'
+        assert level_1_record['child_item'] == 'CHILD'
         
         # Child due date should be parent due date minus parent lead time
         # 2025-01-15 - 3 days = 2025-01-12
-        assert record['child_due_date'] == '2025-01-12'
-        assert record['due_date'] == '2025-01-15'  # Original due date preserved
+        assert level_1_record['child_due_date'] == '2025-01-12'
+        assert level_1_record['due_date'] == '2025-01-15'  # Parent's due date (cascaded)
+    
+    def test_bom_explosion_cascading_due_dates(self):
+        """Test that due_date cascades correctly through BOM levels."""
+        independent_demand = [
+            {'item': 'TOP', 'quantity': 1, 'due_date': '2025-01-20'},
+        ]
+        
+        items = [
+            {'item': 'TOP', 'production_lead_time': 2},
+            {'item': 'MID', 'production_lead_time': 3},
+            {'item': 'BOT', 'production_lead_time': 1},
+        ]
+        
+        bom = [
+            {'parent_item': 'TOP', 'child_item': 'MID', 'quantity_per': 1},
+            {'parent_item': 'MID', 'child_item': 'BOT', 'quantity_per': 2},
+        ]
+        
+        result = explode_bom_iterative(independent_demand, items, bom)
+        
+        # Should have 3 results: TOP level 0, MID level 1, BOT level 2
+        assert len(result) == 3
+        
+        # Level 0: TOP with original due_date
+        level_0 = [r for r in result if r['level'] == 0][0]
+        assert level_0['child_item'] == 'TOP'
+        assert level_0['due_date'] == '2025-01-20'
+        assert level_0['child_due_date'] == '2025-01-20'
+        
+        # Level 1: MID with TOP's due_date, child_due_date calculated from TOP
+        level_1 = [r for r in result if r['level'] == 1][0]
+        assert level_1['parent_item'] == 'TOP'
+        assert level_1['child_item'] == 'MID'
+        assert level_1['due_date'] == '2025-01-20'  # TOP's due_date
+        assert level_1['child_due_date'] == '2025-01-18'  # 2025-01-20 - 2 days (TOP's lead time)
+        
+        # Level 2: BOT with MID's child_due_date as due_date
+        level_2 = [r for r in result if r['level'] == 2][0]
+        assert level_2['parent_item'] == 'MID'
+        assert level_2['child_item'] == 'BOT'
+        assert level_2['due_date'] == '2025-01-18'  # MID's child_due_date cascaded
+        assert level_2['child_due_date'] == '2025-01-15'  # 2025-01-18 - 3 days (MID's lead time)
 
 
 class TestBOMExcelIntegration:

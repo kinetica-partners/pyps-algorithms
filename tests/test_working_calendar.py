@@ -143,7 +143,7 @@ class TestWorkingCalendarCore:
         rules = load_calendar_rules(rules_df)
         
         assert 'default' in rules
-        assert 'calA' in rules
+        assert 'cala' in rules
         assert len(rules['default'][0]) == 1  # Monday has 1 period
         assert rules['default'][0][0] == (time(9, 0), time(17, 0))
     
@@ -153,9 +153,9 @@ class TestWorkingCalendarCore:
         exceptions = load_calendar_exceptions(exceptions_df)
         
         assert 'default' in exceptions
-        assert 'calA' in exceptions
+        assert 'cala' in exceptions
         assert '2025-01-01' in exceptions['default']
-        assert '2025-01-01' in exceptions['calA']
+        assert '2025-01-01' in exceptions['cala']
     
     def test_build_working_intervals(self, sample_calendar_data):
         """Test building working intervals."""
@@ -439,8 +439,8 @@ class TestWorkingCalendarErrorHandling:
         ])
         
         result = load_calendar_exceptions(exceptions_df)
-        assert 'CAL_001' in result
-        assert len(result['CAL_001']) == 1
+        assert 'cal_001' in result
+        assert len(result['cal_001']) == 1
         
         # Test with small number (fallback case)
         exceptions_df_small = pd.DataFrame([
@@ -454,8 +454,8 @@ class TestWorkingCalendarErrorHandling:
         ])
         
         result_small = load_calendar_exceptions(exceptions_df_small)
-        assert 'CAL_002' in result_small
-        assert len(result_small['CAL_002']) == 1
+        assert 'cal_002' in result_small
+        assert len(result_small['cal_002']) == 1
     
     def test_load_calendar_exceptions_string_dates(self):
         """Test load_calendar_exceptions with string dates."""
@@ -470,8 +470,8 @@ class TestWorkingCalendarErrorHandling:
         ])
         
         result = load_calendar_exceptions(exceptions_df)
-        assert 'CAL_003' in result
-        assert '2025-01-15' in result['CAL_003']
+        assert 'cal_003' in result
+        assert '2025-01-15' in result['cal_003']
     
     def test_load_calendar_exceptions_invalid_dates(self):
         """Test load_calendar_exceptions with invalid dates."""
@@ -487,8 +487,8 @@ class TestWorkingCalendarErrorHandling:
         
         # Should handle invalid dates gracefully
         result = load_calendar_exceptions(exceptions_df)
-        assert 'CAL_004' in result
-        assert 'invalid_date' in result['CAL_004']
+        assert 'cal_004' in result
+        assert 'invalid_date' in result['cal_004']
 
 
 class TestWorkingCalendarExceptions:

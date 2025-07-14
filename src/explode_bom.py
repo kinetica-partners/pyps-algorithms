@@ -2,6 +2,7 @@ import pandas as pd
 from collections import deque, defaultdict
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import List, Dict
 import xlwings as xw
 import sys
 import os
@@ -14,49 +15,83 @@ try:
 except ImportError:
     from config import get_file_path, get_data_path, get_project_root
 
-def explode_bom_iterative(independent_demand, items, bom):
+def explode_bom_iterative(independent_demand: List[Dict], items: List[Dict], bom: List[Dict]) -> List[Dict]:
+    """
+    Iterative BOM explosion algorithm.
+    
+    Args:
+        independent_demand: List of demand records with item, quantity, due_date
+        items: List of item records with item, production_lead_time
+        bom: List of BOM records with parent_item, child_item, quantity_per
+        
+    Returns:
+        List of exploded demand records
+    """
     # Create lookup dictionaries
-    lead_times = {item['item']: item['production_lead_time'] for item in items}
+    lead_times = {item['item']: item['production_lead_time'] for item in items if item.get('item')}
     bom_dict = defaultdict(list)
     for b in bom:
-        bom_dict[b['parent_item']].append((b['child_item'], b['quantity_per']))
+        if b.get('parent_item') and b.get('child_item'):
+            bom_dict[b['parent_item']].append((b['child_item'], b['quantity_per']))
     
     total_demand = []
-    queue = deque()
     
-    # Initialize queue with independent demand
+    # Process each independent demand item completely before moving to next
     for demand in independent_demand:
+        # Skip empty/invalid demand records
+        if not demand.get('item') or not demand.get('quantity') or not demand.get('due_date'):
+            continue
+        
         # Convert due_date string to datetime object
         if isinstance(demand['due_date'], str):
             due_date_obj = datetime.strptime(demand['due_date'], '%Y-%m-%d')
         else:
             due_date_obj = demand['due_date']
-        # Queue: (current_item, current_qty, current_due_date, parent_item, original_product_item, original_qty, original_due_date)
-        queue.append((demand['item'], demand['quantity'], due_date_obj, None, demand['item'], demand['quantity'], due_date_obj))
-    
-    while queue:
-        item, qty, due_date, parent_item, product_item, original_qty, original_due_date = queue.popleft()
         
-        # Add current level to results
-        if parent_item:  # Skip root level items
-            total_demand.append({
-                'product_item': product_item,
-                'quantity': original_qty,
-                'due_date': original_due_date.strftime('%Y-%m-%d') if isinstance(original_due_date, datetime) else original_due_date,
-                'parent_item': parent_item,
-                'child_item': item,
-                'child_qty': qty,
-                'child_due_date': due_date.strftime('%Y-%m-%d') if isinstance(due_date, datetime) else due_date
-            })
+        # Create separate queue for this independent demand item
+        queue = deque()
+        # Queue: (current_item, current_qty, current_due_date, parent_item, original_product_item, original_qty, original_due_date, level, parent_due_date)
+        queue.append((demand['item'], demand['quantity'], due_date_obj, None, demand['item'], demand['quantity'], due_date_obj, 0, due_date_obj))
         
-        # Explode children
-        for child_item, qty_per in bom_dict[item]:
-            child_qty = qty * qty_per
-            # Child due date = Parent due date - Parent's lead time
-            # (Child must be ready before parent production starts)
-            parent_lead_time_days = lead_times.get(item, 0)
-            child_due = due_date - timedelta(days=parent_lead_time_days)
-            queue.append((child_item, child_qty, child_due, item, product_item, original_qty, original_due_date))
+        # Process this independent demand item completely
+        while queue:
+            item, qty, due_date, parent_item, product_item, original_qty, original_due_date, level, parent_due_date = queue.popleft()
+            
+            # Add current level to results - ALWAYS add every item including independent demand (level 0)
+            if parent_item is None:
+                # Level 0: Independent demand items (parent = child = item)
+                total_demand.append({
+                    'product_item': product_item,
+                    'quantity': original_qty,
+                    'due_date': original_due_date.strftime('%Y-%m-%d') if isinstance(original_due_date, datetime) else original_due_date,
+                    'parent_item': item,
+                    'child_item': item,
+                    'child_qty': qty,
+                    'child_due_date': due_date.strftime('%Y-%m-%d') if isinstance(due_date, datetime) else due_date,
+                    'level': level
+                })
+            else:
+                # Level 1+: BOM explosion items - due_date is parent's due date, child_due_date is calculated
+                total_demand.append({
+                    'product_item': product_item,
+                    'quantity': original_qty,
+                    'due_date': parent_due_date.strftime('%Y-%m-%d') if isinstance(parent_due_date, datetime) else parent_due_date,
+                    'parent_item': parent_item,
+                    'child_item': item,
+                    'child_qty': qty,
+                    'child_due_date': due_date.strftime('%Y-%m-%d') if isinstance(due_date, datetime) else due_date,
+                    'level': level
+                })
+            
+            # Explode children
+            for child_item, qty_per in bom_dict[item]:
+                child_qty = qty * qty_per
+                # Child due date = Parent due date - Parent's lead time
+                # (Child must be ready before parent production starts)
+                parent_lead_time_days = lead_times.get(item, 0)
+                child_due = due_date - timedelta(days=parent_lead_time_days)
+                # Pass the current item's due_date as the parent_due_date for children
+                queue.append((child_item, child_qty, child_due, item, product_item, original_qty, original_due_date, level + 1, due_date))
     
     return total_demand
 
