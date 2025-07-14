@@ -277,9 +277,9 @@ def bom_explosion_from_excel(book: xw.Book):
     """
     try:
         # Read the tables using direct table reference
-        independent_demand_df = book.sheets['independent_demand'].range('A1').options(pd.DataFrame, header=1, index=False, expand='table').value
-        items_df = book.sheets['items'].range('A1').options(pd.DataFrame, header=1, index=False, expand='table').value
-        bom_df = book.sheets['bom'].range('A1').options(pd.DataFrame, header=1, index=False, expand='table').value
+        independent_demand_df = book.sheets['independent_demand'].range('A10').options(pd.DataFrame, header=1, index=False, expand='table').value
+        items_df = book.sheets['items'].range('A10').options(pd.DataFrame, header=1, index=False, expand='table').value
+        bom_df = book.sheets['bom'].range('A10').options(pd.DataFrame, header=1, index=False, expand='table').value
         
         # Convert to dictionaries for the explosion function
         independent_demand = independent_demand_df.to_dict(orient='records')
@@ -299,10 +299,11 @@ def bom_explosion_from_excel(book: xw.Book):
                 output_sheet = book.sheets['total_demand']
                 output_sheet.clear()
             else:
-                output_sheet = book.sheets.add('total_demand')
+                output_sheet = book.sheets.add('total_demand', after=book.sheets['independent_demand'])
+                book.sheets['total_demand'].range('A10:H10').font.bold = True
             
             # Write the DataFrame to Excel
-            output_sheet.range('A1').options(pd.DataFrame, header=1, index=False).value = total_demand_df
+            output_sheet.range('A10').options(pd.DataFrame, header=1, index=False).value = total_demand_df
             
             return f'BOM explosion completed successfully. {len(total_demand)} records written to total_demand sheet.'
         else:
