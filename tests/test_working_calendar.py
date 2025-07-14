@@ -400,5 +400,278 @@ class TestWorkingCalendarAccuracy:
                     print(f"Skipping {test_name} for {calendar_id}: {e}")
 
 
+class TestWorkingCalendarErrorHandling:
+    """Test error handling and edge cases."""
+    
+    def test_parse_time_string_invalid_format(self):
+        """Test parse_time_string with invalid format."""
+        with pytest.raises(ValueError, match="Invalid time format"):
+            parse_time_string("invalid_time")
+    
+    def test_parse_time_string_invalid_excel_number(self):
+        """Test parse_time_string with invalid Excel time number."""
+        with pytest.raises(ValueError, match="Invalid time format"):
+            parse_time_string(-1)  # Negative time
+    
+    def test_load_calendar_rules_empty_dataframe(self):
+        """Test load_calendar_rules with empty dataframe."""
+        empty_df = pd.DataFrame()
+        result = load_calendar_rules(empty_df)
+        assert result == {}
+    
+    def test_load_calendar_exceptions_empty_dataframe(self):
+        """Test load_calendar_exceptions with empty dataframe."""
+        empty_df = pd.DataFrame()
+        result = load_calendar_exceptions(empty_df)
+        assert result == {}
+    
+    def test_load_calendar_exceptions_excel_serial_dates(self):
+        """Test load_calendar_exceptions with Excel serial dates."""
+        # Test with Excel serial date (modern date)
+        exceptions_df = pd.DataFrame([
+            {
+                'calendar_id': 'CAL_001',
+                'date': 45000,  # Excel serial date (around 2023)
+                'start_time': '09:00',
+                'end_time': '17:00',
+                'is_working': True
+            }
+        ])
+        
+        result = load_calendar_exceptions(exceptions_df)
+        assert 'CAL_001' in result
+        assert len(result['CAL_001']) == 1
+        
+        # Test with small number (fallback case)
+        exceptions_df_small = pd.DataFrame([
+            {
+                'calendar_id': 'CAL_002',
+                'date': 123,  # Small number
+                'start_time': '09:00',
+                'end_time': '17:00',
+                'is_working': True
+            }
+        ])
+        
+        result_small = load_calendar_exceptions(exceptions_df_small)
+        assert 'CAL_002' in result_small
+        assert len(result_small['CAL_002']) == 1
+    
+    def test_load_calendar_exceptions_string_dates(self):
+        """Test load_calendar_exceptions with string dates."""
+        exceptions_df = pd.DataFrame([
+            {
+                'calendar_id': 'CAL_003',
+                'date': '2025-01-15',
+                'start_time': '09:00',
+                'end_time': '17:00',
+                'is_working': True
+            }
+        ])
+        
+        result = load_calendar_exceptions(exceptions_df)
+        assert 'CAL_003' in result
+        assert '2025-01-15' in result['CAL_003']
+    
+    def test_load_calendar_exceptions_invalid_dates(self):
+        """Test load_calendar_exceptions with invalid dates."""
+        exceptions_df = pd.DataFrame([
+            {
+                'calendar_id': 'CAL_004',
+                'date': 'invalid_date',
+                'start_time': '09:00',
+                'end_time': '17:00',
+                'is_working': True
+            }
+        ])
+        
+        # Should handle invalid dates gracefully
+        result = load_calendar_exceptions(exceptions_df)
+        assert 'CAL_004' in result
+        assert 'invalid_date' in result['CAL_004']
+
+
+class TestWorkingCalendarExceptions:
+    """Test exception processing in working calendar."""
+    
+    def test_build_working_intervals_with_exceptions(self):
+        """Test build_working_intervals with various exceptions."""
+        # Create rules
+        rules = {
+            'CAL_001': {
+                0: [(time(9, 0), time(17, 0))]  # Monday 9-17
+            }
+        }
+        
+        # Create exceptions
+        exceptions = {
+            'CAL_001': {
+                '2025-01-06': [  # Monday
+                    (time(12, 0), time(13, 0), False),  # Lunch break (non-working)
+                    (time(18, 0), time(19, 0), True)   # Overtime (working)
+                ]
+            }
+        }
+        
+        start_date = datetime(2025, 1, 6)  # Monday
+        end_date = datetime(2025, 1, 6)
+        
+        intervals = build_working_intervals(rules, exceptions, 'CAL_001', start_date, end_date)
+        
+        # Should have intervals with lunch break removed and overtime added
+        assert len(intervals) >= 2
+        
+        # Test day with no exceptions
+        exceptions_no_match = {
+            'CAL_001': {
+                '2025-01-07': [  # Tuesday (different day)
+                    (time(12, 0), time(13, 0), False)
+                ]
+            }
+        }
+        
+        intervals_no_exception = build_working_intervals(rules, exceptions_no_match, 'CAL_001', start_date, end_date)
+        assert len(intervals_no_exception) >= 1
+    
+    def test_build_working_intervals_working_exceptions_only(self):
+        """Test build_working_intervals with only working exceptions."""
+        rules = {
+            'CAL_001': {
+                0: [(time(9, 0), time(17, 0))]  # Monday 9-17
+            }
+        }
+        
+        exceptions = {
+            'CAL_001': {
+                '2025-01-06': [
+                    (time(18, 0), time(20, 0), True)   # Overtime only
+                ]
+            }
+        }
+        
+        start_date = datetime(2025, 1, 6)
+        end_date = datetime(2025, 1, 6)
+        
+        intervals = build_working_intervals(rules, exceptions, 'CAL_001', start_date, end_date)
+        assert len(intervals) >= 2  # Regular hours + overtime
+    
+    def test_build_working_intervals_non_working_exceptions_only(self):
+        """Test build_working_intervals with only non-working exceptions."""
+        rules = {
+            'CAL_001': {
+                0: [(time(9, 0), time(17, 0))]  # Monday 9-17
+            }
+        }
+        
+        exceptions = {
+            'CAL_001': {
+                '2025-01-06': [
+                    (time(12, 0), time(13, 0), False)  # Lunch break only
+                ]
+            }
+        }
+        
+        start_date = datetime(2025, 1, 6)
+        end_date = datetime(2025, 1, 6)
+        
+        intervals = build_working_intervals(rules, exceptions, 'CAL_001', start_date, end_date)
+        assert len(intervals) >= 1  # Should have split working periods
+
+
+class TestWorkingCalendarScriptExecution:
+    """Test script execution paths."""
+    
+    def test_script_execution_path_exists(self):
+        """Test that script execution path exists."""
+        import working_calendar
+        import inspect
+        
+        # Get the source code
+        source = inspect.getsource(working_calendar)
+        
+        # Verify the main execution block exists
+        assert 'if __name__ == "__main__":' in source
+        assert 'sys.path.insert(0, os.path.dirname(__file__))' in source
+    
+    def test_xlwings_imports(self):
+        """Test xlwings import handling."""
+        # Test that xlwings imports work
+        from working_calendar import xw
+        assert xw is not None
+        
+        # Test that func and arg are available
+        try:
+            from working_calendar import func, arg
+            assert func is not None
+            assert arg is not None
+        except ImportError:
+            # May not be available in all environments
+            pass
+
+
+class TestWorkingCalendarUtilities:
+    """Test utility functions and edge cases."""
+    
+    def test_add_working_minutes_edge_cases(self):
+        """Test add_working_minutes with edge cases."""
+        # Test with empty intervals
+        empty_intervals = []
+        result = add_working_minutes(datetime(2025, 1, 6, 9, 0), 60, empty_intervals)
+        assert result is None
+        
+        # Test with zero duration
+        intervals = [(datetime(2025, 1, 6, 9, 0), datetime(2025, 1, 6, 17, 0), 0)]
+        result = add_working_minutes(datetime(2025, 1, 6, 9, 0), 0, intervals)
+        assert result == datetime(2025, 1, 6, 9, 0)
+        
+        # Test with start time outside intervals
+        result = add_working_minutes(datetime(2025, 1, 6, 8, 0), 60, intervals)
+        assert result is not None
+    
+    def test_datetime_to_excel_edge_cases(self):
+        """Test datetime_to_excel with edge cases."""
+        # Test with different date formats
+        test_date = datetime(2025, 1, 1, 12, 0)
+        result = datetime_to_excel(test_date)
+        assert isinstance(result, float)
+        assert result > 0
+        
+        # Test with midnight
+        midnight = datetime(2025, 1, 1, 0, 0)
+        result_midnight = datetime_to_excel(midnight)
+        assert isinstance(result_midnight, float)
+
+
+class TestWorkingCalendarPathHandling:
+    """Test path handling and imports."""
+    
+    def test_config_imports_working(self):
+        """Test that config imports work correctly."""
+        from working_calendar import get_file_path, get_data_path
+        assert callable(get_file_path)
+        assert callable(get_data_path)
+    
+    def test_module_imports(self):
+        """Test that all required modules are imported."""
+        import working_calendar
+        
+        # Check that all required functions are available
+        required_functions = [
+            'excel_boolean_to_python',
+            'excel_time_to_string',
+            'parse_time_string',
+            'datetime_to_excel',
+            'load_calendar_rules',
+            'load_calendar_exceptions',
+            'build_working_intervals',
+            'add_working_minutes',
+            'calculate_working_completion_time'
+        ]
+        
+        for func_name in required_functions:
+            assert hasattr(working_calendar, func_name)
+            assert callable(getattr(working_calendar, func_name))
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

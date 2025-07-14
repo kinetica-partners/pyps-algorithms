@@ -9,6 +9,7 @@ dependencies = [
     "pytest>=8.4.1",
     "xlwings>=0.33.15",
     "pyyaml>=6.0",
+    "pytest-cov>=6.2.1",
 ]
 
 [project.scripts]
