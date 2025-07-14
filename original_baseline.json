@@ -1,0 +1,22 @@
+{
+  "simplicity": {
+    "total_lines": 195,
+    "code_lines": 134,
+    "blank_lines": 32,
+    "comment_lines": 29,
+    "functions": 6,
+    "classes": 0,
+    "avg_function_length": 25.8,
+    "max_function_length": 62,
+    "avg_function_params": 2.5,
+    "max_function_params": 5
+  },
+  "performance": {
+    "data_loading_time": 0.00179,
+    "interval_building_time": 0.00139,
+    "avg_query_time": 0.000005,
+    "max_query_time": 0.000008,
+    "total_intervals": 377
+  },
+  "timestamp": "2025-07-04T09:14:28.113805"
+}
