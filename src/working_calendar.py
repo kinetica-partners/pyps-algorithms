@@ -2,6 +2,16 @@ import pandas as pd
 from datetime import datetime, timedelta, time, date
 from bisect import bisect_right
 from typing import List, Dict, Tuple, Optional
+import sys
+import os
+# Add src directory to path when running as main script
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(__file__))
+
+try:
+    from .config import get_file_path, get_data_path
+except ImportError:
+    from config import get_file_path, get_data_path
 
 # xlwings imports (for Excel integration)
 import xlwings as xw
@@ -522,3 +532,75 @@ def calculate_working_completion_time(
             
         except Exception as e:
             return f"Error: {str(e)}"
+
+
+def main(dataset='current'):
+    """
+    Main function to demonstrate working calendar functionality using configured paths.
+    
+    Args:
+        dataset (str): Dataset name (current, simple, test, etc.) as defined in config.yaml
+    """
+    import pandas as pd
+    from datetime import datetime
+    
+    try:
+        # Load calendar data using portable configuration
+        rules_file = get_file_path(dataset, 'calendar_rules')
+        exceptions_file = get_file_path(dataset, 'calendar_exceptions')
+        
+        rules_df = pd.read_csv(rules_file)
+        exceptions_df = pd.read_csv(exceptions_file)
+        
+        print("Working Calendar Demo")
+        print("=" * 50)
+        
+        # Load calendar data
+        rules = load_calendar_rules(rules_df)
+        exceptions = load_calendar_exceptions(exceptions_df)
+        
+        print(f"Loaded {len(rules)} calendars with rules")
+        print(f"Loaded {len(exceptions)} calendars with exceptions")
+        
+        # Demo calculation for each calendar
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        job_duration = 120  # 2 hours in minutes
+        
+        print(f"\nDemo: Adding {job_duration} minutes to {start_datetime}")
+        print("-" * 50)
+        
+        for calendar_id in rules.keys():
+            print(f"\nCalendar '{calendar_id}':")
+            
+            # Build working intervals for a reasonable range
+            start_date = start_datetime.date()
+            end_date = start_date + timedelta(days=30)
+            
+            intervals = build_working_intervals(
+                rules, exceptions, calendar_id, start_date, end_date
+            )
+            
+            if intervals:
+                completion_time = add_working_minutes(start_datetime, job_duration, intervals)
+                if completion_time:
+                    duration = completion_time - start_datetime
+                    print(f"  Start: {start_datetime}")
+                    print(f"  End:   {completion_time}")
+                    print(f"  Total elapsed: {duration}")
+                else:
+                    print(f"  Could not calculate completion time")
+            else:
+                print(f"  No working intervals found")
+        
+        print(f"\nWorking calendar demo completed successfully!")
+        
+    except FileNotFoundError as e:
+        print(f"Error: Calendar data files not found for dataset '{dataset}'")
+        print(f"Expected files: calendar_rules.csv, calendar_exceptions.csv")
+        print(f"Details: {e}")
+    except Exception as e:
+        print(f"Error during working calendar demo: {e}")
+
+
+if __name__ == "__main__":
+    main()

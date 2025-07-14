@@ -1,0 +1,39 @@
+# PyPS Scheduling Algorithms - Path Configuration
+# All paths are relative to project root and cross-platform compatible
+
+# Data directories
+data:
+  root: "data"
+  current: "data/current"
+  simple: "data/simple" 
+  test: "data/test"
+  rnc: "data/RnC"
+  xpreso: "data/xpreso"
+  twelve_pyr: "data/12PYR"
+
+# Input files (relative to data directories)
+files:
+  bom: "bom.csv"
+  items: "items.csv"
+  independent_demand: "independent_demand.csv"
+  total_demand: "total_demand.csv"
+  calendar_rules: "calendar_rules.csv"
+  calendar_exceptions: "calendar_exceptions.csv"
+
+# Test directories
+test:
+  root: "tests"
+  data: "tests/test_data"
+
+# Test data files
+test_files:
+  baseline: "tests/test_data/baseline.json"
+  refactor_baseline: "tests/test_data/refactor_baseline.json"
+
+# Source directories
+src:
+  root: "src"
+
+# Documentation
+docs:
+  root: "docs"

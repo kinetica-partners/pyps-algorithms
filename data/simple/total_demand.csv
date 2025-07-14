@@ -1,0 +1,4 @@
+product_item,quantity,due_date,parent_item,child_item,child_qty,child_due_date
+FP-0001,1.0,2025-06-01,FP-0001,SP-1001,2.0,2025-05-25
+FP-0001,1.0,2025-06-01,SP-1001,SP-2001,6.0,2025-05-23
+FP-0001,1.0,2025-06-01,SP-2001,RM-3001,24.0,2025-05-22
