@@ -270,7 +270,16 @@ def build_working_intervals(
             # Calculate using direct time arithmetic instead of datetime
             start_minutes = start_time.hour * 60 + start_time.minute
             end_minutes = end_time.hour * 60 + end_time.minute
-            time_to_minutes_cache[key] = end_minutes - start_minutes
+            
+            # Handle overnight shifts that span midnight
+            if end_minutes <= start_minutes:
+                # Shift spans midnight: calculate as (24:00 - start) + (end - 00:00)
+                duration = (24 * 60 - start_minutes) + end_minutes
+            else:
+                # Normal shift within the same day
+                duration = end_minutes - start_minutes
+            
+            time_to_minutes_cache[key] = duration
         return time_to_minutes_cache[key]
     
     # Batch process all days
@@ -299,6 +308,11 @@ def build_working_intervals(
         for start_time, end_time in periods:
             start_dt = datetime.combine(current_date, start_time)
             end_dt = datetime.combine(current_date, end_time)
+            
+            # Handle overnight shifts that span midnight
+            if end_time <= start_time:
+                end_dt += timedelta(days=1)
+            
             intervals.append((start_dt, end_dt, total_minutes))
             # Use cached time calculation instead of datetime arithmetic
             total_minutes += get_time_difference_minutes(start_time, end_time)
@@ -371,6 +385,80 @@ def add_working_minutes(
     iv_start, iv_end, cumu_at_iv_start = working_intervals[target_idx]
     minute_offset = target_cumu - cumu_at_iv_start
     return iv_start + timedelta(minutes=minute_offset)
+
+def calculate_dynamic_buffer_days(
+    minutes_to_add: int,
+    calendar_rules: Dict[str, Dict[int, List[Tuple[time, time]]]],
+    calendar_id: str
+) -> int:
+    """
+    Calculate buffer days using heuristic based on actual calendar working hours.
+    
+    Args:
+        minutes_to_add: Job duration in minutes
+        calendar_rules: Loaded calendar rules
+        calendar_id: Calendar ID to analyze
+        
+    Returns:
+        Number of buffer days needed
+    """
+    # Get actual working minutes per week from calendar rules
+    calendar_data = calendar_rules.get(calendar_id, {})
+    weekly_working_minutes = 0
+    
+    for weekday in range(7):  # Monday=0 to Sunday=6
+        day_periods = calendar_data.get(weekday, [])
+        for start_time, end_time in day_periods:
+            start_minutes = start_time.hour * 60 + start_time.minute
+            end_minutes = end_time.hour * 60 + end_time.minute
+            
+            # Handle overnight shifts that span midnight
+            if end_minutes <= start_minutes:
+                # Shift spans midnight: calculate as (24:00 - start) + (end - 00:00)
+                duration = (24 * 60 - start_minutes) + end_minutes
+            else:
+                # Normal shift within the same day
+                duration = end_minutes - start_minutes
+            
+            weekly_working_minutes += duration
+    
+    # Handle edge case: no working time defined
+    if weekly_working_minutes == 0:
+        return max(365, minutes_to_add // 1440)  # Fallback: 1 day per 1440 minutes
+    
+    # Calculate working-to-calendar ratio
+    minutes_per_week = 7 * 24 * 60  # 10,080 minutes per week
+    working_ratio = weekly_working_minutes / minutes_per_week
+    
+    # Estimate calendar days needed
+    estimated_days = minutes_to_add / (weekly_working_minutes / 7)
+    
+    # Apply safety margin based on job size and calendar density
+    if minutes_to_add < 1440:  # < 1 day of continuous work
+        safety_multiplier = 3.0  # 200% margin for small jobs
+    elif minutes_to_add < 43200:  # < 1 month of continuous work
+        safety_multiplier = 2.0  # 100% margin for medium jobs
+    else:  # Large jobs
+        safety_multiplier = 1.5  # 50% margin for large jobs
+    
+    # Calculate final buffer with minimum safety days
+    safety_days = max(14, int(estimated_days * safety_multiplier))
+    
+    # For very low-density calendars (< 2 hours/week), add extra buffer
+    if weekly_working_minutes < 120:  # Less than 2 hours per week
+        safety_days = max(safety_days, int(estimated_days * 5))  # 400% extra margin
+    
+    # For calendars with sparse working days, ensure we cover at least 2 cycles
+    working_days_per_week = sum(1 for day in range(7) if calendar_data.get(day, []))
+    if working_days_per_week <= 2:  # Weekend-only or very sparse
+        weeks_needed = int(estimated_days / 7) + 1
+        safety_days = max(safety_days, weeks_needed * 14)  # At least 2 weeks per cycle
+    
+    # Cap maximum buffer to prevent excessive memory usage
+    max_buffer = min(3650, max(safety_days, minutes_to_add // 100))  # Max 10 years or 1 day per 100 minutes
+    
+    return min(safety_days, max_buffer)
+
 
 # --- xlwings Lite Integration ---
 
@@ -505,13 +593,9 @@ def calculate_working_completion_time(
                     return "Error: No calendar rules found in data"
                 calendar_id_lower = next(iter(rules.keys()))
             
-            # Calculate date range for interval building (start date + reasonable buffer)
+            # Calculate date range for interval building using dynamic buffer
             start_date = start_dt.date()
-            # Add buffer based on job size with conservative estimate
-            # Assume 5 working hours per calendar day (accounts for weekends, holidays, etc.)
-            # Add 50% safety margin and minimum 14 days for small jobs
-            estimated_working_days = minutes_to_add / (5 * 60)  # 5 hours working time per calendar day
-            buffer_days = max(14, int(estimated_working_days * 1.5) + 7)  # 50% margin + 7 day buffer
+            buffer_days = calculate_dynamic_buffer_days(minutes_to_add, rules, calendar_id_lower)
             end_date = start_date + timedelta(days=buffer_days)
             
             # Build working intervals
@@ -565,7 +649,7 @@ def main(dataset='current'):
         
         # Demo calculation for each calendar
         start_datetime = datetime(2025, 1, 1, 14, 8)  # Monday 2:08 PM
-        job_duration = 60  # 1 hour in minutes
+        job_duration = 1000  # 1000 minutes
 
         print(f"\nDemo: Adding {job_duration} minutes to {start_datetime}")
         print("-" * 50)
@@ -573,9 +657,10 @@ def main(dataset='current'):
         for calendar_id in rules.keys():
             print(f"\nCalendar '{calendar_id}':")
             
-            # Build working intervals for a reasonable range
+            # Build working intervals using dynamic buffer calculation
             start_date = start_datetime.date()
-            end_date = start_date + timedelta(days=30)
+            buffer_days = calculate_dynamic_buffer_days(job_duration, rules, calendar_id)
+            end_date = start_date + timedelta(days=buffer_days)
             
             intervals = build_working_intervals(
                 rules, exceptions, calendar_id, start_date, end_date

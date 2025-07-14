@@ -50,12 +50,11 @@ def excel_boolean_to_python(excel_bool) -> bool:
         return False
 
 def datetime_to_excel(dt: datetime) -> float:
-    """Convert datetime to Excel serial number."""
-    # Excel epoch starts at 1900-01-01, but Excel treats 1900 as leap year
-    excel_epoch = datetime(1900, 1, 1)
+    """Convert Python datetime to Excel date/time format (float)."""
+    # Excel's epoch starts at 1899-12-30
+    excel_epoch = datetime(1899, 12, 30)
     delta = dt - excel_epoch
-    # Add 2 days to account for Excel's leap year bug and 1-based indexing
-    return delta.days + 2 + (delta.seconds / 86400.0)
+    return float(delta.days) + (delta.seconds + delta.microseconds / 1e6) / 86400
 
 def parse_time_string(time_string) -> Optional[time]:
     """Parse time string in HH:MM format to time object, handling Excel time serial numbers."""
@@ -254,7 +253,16 @@ def build_working_intervals(
             # Calculate using direct time arithmetic instead of datetime
             start_minutes = start_time.hour * 60 + start_time.minute
             end_minutes = end_time.hour * 60 + end_time.minute
-            time_to_minutes_cache[key] = end_minutes - start_minutes
+            
+            # Handle overnight shifts that span midnight
+            if end_minutes <= start_minutes:
+                # Shift spans midnight: calculate as (24:00 - start) + (end - 00:00)
+                duration = (24 * 60 - start_minutes) + end_minutes
+            else:
+                # Normal shift within the same day
+                duration = end_minutes - start_minutes
+            
+            time_to_minutes_cache[key] = duration
         return time_to_minutes_cache[key]
     
     # Batch process all days
@@ -283,6 +291,11 @@ def build_working_intervals(
         for start_time, end_time in periods:
             start_dt = datetime.combine(current_date, start_time)
             end_dt = datetime.combine(current_date, end_time)
+            
+            # Handle overnight shifts that span midnight
+            if end_time <= start_time:
+                end_dt += timedelta(days=1)
+            
             intervals.append((start_dt, end_dt, total_minutes))
             # Use cached time calculation instead of datetime arithmetic
             total_minutes += get_time_difference_minutes(start_time, end_time)
@@ -356,6 +369,80 @@ def add_working_minutes(
     minute_offset = target_cumu - cumu_at_iv_start
     return iv_start + timedelta(minutes=minute_offset)
 
+def calculate_dynamic_buffer_days(
+    minutes_to_add: int,
+    calendar_rules: Dict[str, Dict[int, List[Tuple[time, time]]]],
+    calendar_id: str
+) -> int:
+    """
+    Calculate buffer days using heuristic based on actual calendar working hours.
+    
+    Args:
+        minutes_to_add: Job duration in minutes
+        calendar_rules: Loaded calendar rules
+        calendar_id: Calendar ID to analyze
+        
+    Returns:
+        Number of buffer days needed
+    """
+    # Get actual working minutes per week from calendar rules
+    calendar_data = calendar_rules.get(calendar_id, {})
+    weekly_working_minutes = 0
+    
+    for weekday in range(7):  # Monday=0 to Sunday=6
+        day_periods = calendar_data.get(weekday, [])
+        for start_time, end_time in day_periods:
+            start_minutes = start_time.hour * 60 + start_time.minute
+            end_minutes = end_time.hour * 60 + end_time.minute
+            
+            # Handle overnight shifts that span midnight
+            if end_minutes <= start_minutes:
+                # Shift spans midnight: calculate as (24:00 - start) + (end - 00:00)
+                duration = (24 * 60 - start_minutes) + end_minutes
+            else:
+                # Normal shift within the same day
+                duration = end_minutes - start_minutes
+            
+            weekly_working_minutes += duration
+    
+    # Handle edge case: no working time defined
+    if weekly_working_minutes == 0:
+        return max(365, minutes_to_add // 1440)  # Fallback: 1 day per 1440 minutes
+    
+    # Calculate working-to-calendar ratio
+    minutes_per_week = 7 * 24 * 60  # 10,080 minutes per week
+    working_ratio = weekly_working_minutes / minutes_per_week
+    
+    # Estimate calendar days needed
+    estimated_days = minutes_to_add / (weekly_working_minutes / 7)
+    
+    # Apply safety margin based on job size and calendar density
+    if minutes_to_add < 1440:  # < 1 day of continuous work
+        safety_multiplier = 3.0  # 200% margin for small jobs
+    elif minutes_to_add < 43200:  # < 1 month of continuous work  
+        safety_multiplier = 2.0  # 100% margin for medium jobs
+    else:  # Large jobs
+        safety_multiplier = 1.5  # 50% margin for large jobs
+    
+    # Calculate final buffer with minimum safety days
+    safety_days = max(14, int(estimated_days * safety_multiplier))
+    
+    # For very low-density calendars (< 2 hours/week), add extra buffer
+    if weekly_working_minutes < 120:  # Less than 2 hours per week
+        safety_days = max(safety_days, int(estimated_days * 5))  # 400% extra margin
+    
+    # For calendars with sparse working days, ensure we cover at least 2 cycles
+    working_days_per_week = sum(1 for day in range(7) if calendar_data.get(day, []))
+    if working_days_per_week <= 2:  # Weekend-only or very sparse
+        weeks_needed = int(estimated_days / 7) + 1
+        safety_days = max(safety_days, weeks_needed * 14)  # At least 2 weeks per cycle
+    
+    # Cap maximum buffer to prevent excessive memory usage
+    max_buffer = min(3650, max(safety_days, minutes_to_add // 100))  # Max 10 years or 1 day per 100 minutes
+    
+    return min(safety_days, max_buffer)
+
+
 # --- Data Loading for xlwings lite (hardcoded paths) ---
 
 def get_default_calendar_rules():
@@ -418,10 +505,6 @@ def calculate_working_completion_time(
         calendar_rules = load_calendar_rules(rules_df)
         calendar_exceptions = load_calendar_exceptions(exceptions_df)
         
-        # Build working intervals for sufficient period
-        start_date = start_dt.date()
-        end_date = start_date + timedelta(days=90)  # 90 days should be sufficient
-        
         # Check if calendar_id exists in rules (case-insensitive)
         calendar_id_lower = calendar_id.lower()
         if calendar_id_lower not in calendar_rules:
@@ -429,6 +512,11 @@ def calculate_working_completion_time(
             if not calendar_rules:
                 return "Error: No calendar rules found in data"
             calendar_id_lower = next(iter(calendar_rules.keys()))
+        
+        # Build working intervals using dynamic buffer calculation
+        start_date = start_dt.date()
+        buffer_days = calculate_dynamic_buffer_days(minutes_to_add, calendar_rules, calendar_id_lower)
+        end_date = start_date + timedelta(days=buffer_days)
         
         working_intervals = build_working_intervals(
             calendar_rules, calendar_exceptions, calendar_id_lower, start_date, end_date

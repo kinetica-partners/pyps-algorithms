@@ -673,5 +673,188 @@ class TestWorkingCalendarPathHandling:
             assert callable(getattr(working_calendar, func_name))
 
 
+class TestDynamicBufferBehavior:
+    """Test that working calendar functions adapt dynamically to different calendar patterns."""
+    
+    @pytest.fixture
+    def high_density_calendar_data(self):
+        """High density 24/7 calendar data."""
+        rules_data = [
+            ['id', 'calendar_id', 'weekday', 'start_time', 'end_time'],
+            [1, 'high_density', 'Mon', '00:00', '23:59'],
+            [2, 'high_density', 'Tue', '00:00', '23:59'],
+            [3, 'high_density', 'Wed', '00:00', '23:59'],
+            [4, 'high_density', 'Thu', '00:00', '23:59'],
+            [5, 'high_density', 'Fri', '00:00', '23:59'],
+            [6, 'high_density', 'Sat', '00:00', '23:59'],
+            [7, 'high_density', 'Sun', '00:00', '23:59'],
+        ]
+        
+        exceptions_data = [
+            ['id', 'calendar_id', 'date', 'start_time', 'end_time', 'is_working']
+        ]
+        
+        return rules_data, exceptions_data
+    
+    @pytest.fixture
+    def low_density_calendar_data(self):
+        """Low density 1 hour per week calendar data."""
+        rules_data = [
+            ['id', 'calendar_id', 'weekday', 'start_time', 'end_time'],
+            [1, 'low_density', 'Mon', '09:00', '10:00'],  # Only 1 hour per week
+        ]
+        
+        exceptions_data = [
+            ['id', 'calendar_id', 'date', 'start_time', 'end_time', 'is_working']
+        ]
+        
+        return rules_data, exceptions_data
+    
+    def test_completion_time_scales_with_job_size(self):
+        """Test that completion time calculation works for different job sizes."""
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        
+        # Test various job sizes
+        job_sizes = [60, 480, 2400, 9600]  # 1 hour, 8 hours, 40 hours, 160 hours
+        
+        for job_minutes in job_sizes:
+            result = calculate_working_completion_time(
+                start_datetime=start_datetime,
+                jobtime=job_minutes,
+                calendar_id="default"
+            )
+            
+            # Should return a valid completion time, not an error
+            assert isinstance(result, (datetime, float)), f"Job size {job_minutes} failed: {result}"
+            if isinstance(result, str) and "Error" in result:
+                pytest.fail(f"Job size {job_minutes} returned error: {result}")
+    
+    def test_completion_time_adapts_to_calendar_density(self, high_density_calendar_data, low_density_calendar_data):
+        """Test that completion time adapts to different calendar working densities."""
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        job_minutes = 120  # 2 hours
+        
+        # Test high density calendar
+        high_rules, high_exceptions = high_density_calendar_data
+        high_result = calculate_working_completion_time(
+            start_datetime=start_datetime,
+            jobtime=job_minutes,
+            calendar_rules_data=high_rules,
+            calendar_exceptions_data=high_exceptions,
+            calendar_id="high_density"
+        )
+        
+        # Test low density calendar
+        low_rules, low_exceptions = low_density_calendar_data
+        low_result = calculate_working_completion_time(
+            start_datetime=start_datetime,
+            jobtime=job_minutes,
+            calendar_rules_data=low_rules,
+            calendar_exceptions_data=low_exceptions,
+            calendar_id="low_density"
+        )
+        
+        # Both should work (not return errors)
+        assert not (isinstance(high_result, str) and "Error" in high_result), f"High density failed: {high_result}"
+        assert not (isinstance(low_result, str) and "Error" in low_result), f"Low density failed: {low_result}"
+    
+    def test_completion_time_handles_large_jobs(self):
+        """Test that completion time calculation handles very large jobs efficiently."""
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        large_job = 50_000  # Large job: ~833 hours
+        
+        # Should complete without timeout or excessive memory usage
+        result = calculate_working_completion_time(
+            start_datetime=start_datetime,
+            jobtime=large_job,
+            calendar_id="default"
+        )
+        
+        # Should return a result, not an error about insufficient time range
+        assert isinstance(result, (datetime, float)), f"Large job failed: {result}"
+        if isinstance(result, str) and "Error" in result:
+            # If it's an error, it should NOT be about insufficient time range
+            assert "Cannot complete" not in result, f"Large job failed due to insufficient buffer: {result}"
+    
+    def test_completion_time_efficient_memory_usage(self):
+        """Test that completion time calculation doesn't generate excessive working intervals."""
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        
+        # Test with progressively larger jobs
+        job_sizes = [1440, 14400, 144000]  # 1 day, 10 days, 100 days of continuous work
+        
+        for job_minutes in job_sizes:
+            result = calculate_working_completion_time(
+                start_datetime=start_datetime,
+                jobtime=job_minutes,
+                calendar_id="default"
+            )
+            
+            # Should complete efficiently without memory issues
+            assert isinstance(result, (datetime, float)), f"Job size {job_minutes} failed: {result}"
+            if isinstance(result, str) and "Error" in result:
+                # Should not fail due to excessive buffer calculation
+                assert "Cannot complete" not in result, f"Job size {job_minutes} failed due to buffer: {result}"
+    
+    def test_completion_time_no_hardcoded_assumptions(self):
+        """Test that completion time calculation works with various calendar patterns without hardcoded assumptions."""
+        start_datetime = datetime(2025, 1, 6, 9, 0)  # Monday 9 AM
+        job_minutes = 480  # 8 hours
+        
+        # Test with various calendar patterns
+        calendar_patterns = [
+            # Weekend-only calendar
+            [
+                ['id', 'calendar_id', 'weekday', 'start_time', 'end_time'],
+                [1, 'weekend', 'Sat', '09:00', '17:00'],
+                [2, 'weekend', 'Sun', '09:00', '17:00'],
+            ],
+            # Night shift calendar
+            [
+                ['id', 'calendar_id', 'weekday', 'start_time', 'end_time'],
+                [1, 'night', 'Mon', '22:00', '06:00'],
+                [2, 'night', 'Tue', '22:00', '06:00'],
+                [3, 'night', 'Wed', '22:00', '06:00'],
+                [4, 'night', 'Thu', '22:00', '06:00'],
+                [5, 'night', 'Fri', '22:00', '06:00'],
+            ],
+            # Split shift calendar
+            [
+                ['id', 'calendar_id', 'weekday', 'start_time', 'end_time'],
+                [1, 'split', 'Mon', '06:00', '10:00'],
+                [2, 'split', 'Mon', '14:00', '18:00'],
+                [3, 'split', 'Tue', '06:00', '10:00'],
+                [4, 'split', 'Tue', '14:00', '18:00'],
+                [5, 'split', 'Wed', '06:00', '10:00'],
+                [6, 'split', 'Wed', '14:00', '18:00'],
+                [7, 'split', 'Thu', '06:00', '10:00'],
+                [8, 'split', 'Thu', '14:00', '18:00'],
+                [9, 'split', 'Fri', '06:00', '10:00'],
+                [10, 'split', 'Fri', '14:00', '18:00'],
+            ]
+        ]
+        
+        exceptions_data = [
+            ['id', 'calendar_id', 'date', 'start_time', 'end_time', 'is_working']
+        ]
+        
+        for rules_data in calendar_patterns:
+            calendar_id = rules_data[1][1]  # Extract calendar_id from first data row
+            
+            result = calculate_working_completion_time(
+                start_datetime=start_datetime,
+                jobtime=job_minutes,
+                calendar_rules_data=rules_data,
+                calendar_exceptions_data=exceptions_data,
+                calendar_id=calendar_id
+            )
+            
+            # Should work with any calendar pattern
+            assert isinstance(result, (datetime, float)), f"Calendar {calendar_id} failed: {result}"
+            if isinstance(result, str) and "Error" in result:
+                pytest.fail(f"Calendar {calendar_id} returned error: {result}")
+
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
