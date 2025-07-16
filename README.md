@@ -1,35 +1,34 @@
-# PyPS Scheduling Algorithms
+# PyPS Planning Algorithms
 
-Two production-ready planning algorithms with Excel integration: **BOM Explosion** and **Working Calendar** calculations.
+An repository with example planning and scheduling algorithms that can work as a component or within an Excel workbook.
+
+1. BOM Explosion - Explodes Bill of Materials with lead time calculations
+2. Working Calendar - Calculates working time completion with calendar rules and exceptions
+
+The core functions are included in ./src along with companion modules designed to function in xlwings lite.
 
 ## 🚀 Quick Start
 
-### Option 1: Git Clone (Recommended)
-**PowerShell/Command Prompt (Windows):**
-```powershell
-git clone https://github.com/your-repo/pyps_algorithms.git
-cd pyps_algorithms
-pip install pandas pytest xlwings pyyaml
-python main.py
-```
-
-**Bash (Linux/macOS):**
+### Option 1: Git Clone (If Git installed)
+**Cross-platform:** All commands below work in bash, zsh, and PowerShell
 ```bash
-git clone https://github.com/your-repo/pyps_algorithms.git
+git clone https://github.com/kinetica-partners/pyps-algorithms
 cd pyps_algorithms
-pip install pandas pytest xlwings pyyaml
-python main.py
+uv sync
+uv run python src/explode_bom.py
+uv run python src/working_calendar.py
 ```
 
 ### Option 2: Download ZIP
-1. [Download ZIP](https://github.com/your-repo/pyps_algorithms/archive/main.zip)
-2. Extract to your desired location
-3. Open PowerShell/Command Prompt in the extracted folder
-4. Run:
-   ```powershell
-   pip install pandas pytest xlwings pyyaml
-   python main.py
-   ```
+1. **Download** the repository zip file (https://github.com/kinetica-partners/pyps-algorithms/archive/refs/heads/main.zip)
+2. **Extract** to your desired location
+3. **Rename** the folder from `pyps-algorithms-main` to `pyps_algorithms`
+4. **Run** (works in bash, zsh, and PowerShell):
+```bash
+uv sync
+uv run python src/explode_bom.py
+uv run python src/working_calendar.py
+```
 
 ## 📋 What You Get
 
@@ -46,56 +45,36 @@ Both algorithms include **xlwings lite** modules for seamless Excel integration.
 
 ```
 pyps_algorithms/
-├── src/                        # Main algorithms
-│   ├── config.py               # Configuration management
-│   ├── explode_bom.py          # BOM explosion algorithm
-│   └── working_calendar.py     # Working calendar algorithm
-├── xlwings_lite/               # Excel-compatible versions
-│   ├── explode_bom_lite.py     # BOM explosion for Excel
-│   └── working_calendar_lite.py # Working calendar for Excel
-├── excel/                      # Excel workbook examples
-│   └── Archive/                # Previous Excel versions
-├── data/current/               # Sample input data
-│   ├── bom.csv                 # Bill of materials
-│   ├── items.csv               # Item master data
-│   ├── independent_demand.csv  # Customer demand
-│   ├── calendar_rules.csv      # Working time rules
-│   └── calendar_exceptions.csv # Holidays & exceptions
-├── tests/                      # Comprehensive test suite
-├── config.yaml                 # Path configuration
-└── main.py                     # Interactive demo
+├── src/                              # Main algorithms
+│   ├── config.py                     # Configuration management
+│   ├── explode_bom.py                # BOM explosion algorithm
+│   └── working_calendar.py           # Working calendar algorithm
+├── xlwings_lite/                     # Excel-compatible versions
+│   ├── explode_bom_lite.py           # BOM explosion for Excel
+│   └── working_calendar_lite.py      # Working calendar for Excel
+├── excel/                            # Excel workbook examples
+│   ├── BOM_Explosion_v01.xx.xlsm     # Working time rules
+│   └── Working_Calendar_v01.xx.xlsm  # Holidays & exceptions
+├── data/current/                     # Sample input data
+│   ├── bom.csv                       # Bill of materials
+│   ├── items.csv                     # Item master data
+│   ├── independent_demand.csv        # Customer demand
+│   ├── calendar_rules.csv            # Working time rules
+│   └── calendar_exceptions.csv       # Holidays & exceptions
+├── tests/                            # Comprehensive test suite
+├── config.yaml                       # Path configuration
 ```
 
 ## 🎯 Getting Started Examples
 
-### Run the Interactive Demo
-**PowerShell/Command Prompt:**
-```powershell
-python main.py
-```
-
-**Bash:**
-```bash
-python main.py
-```
-
 ### Try Individual Algorithms
-**PowerShell/Command Prompt:**
-```powershell
-# BOM Explosion
-python src/explode_bom.py
-
-# Working Calendar
-python src/working_calendar.py
-```
-
-**Bash:**
+**Cross-platform:** All commands below work in bash, zsh, and PowerShell
 ```bash
 # BOM Explosion
-python src/explode_bom.py
+uv run python src/explode_bom.py
 
 # Working Calendar
-python src/working_calendar.py
+uv run python src/working_calendar.py
 ```
 
 ## 📊 Excel Integration with xlwings
@@ -154,9 +133,9 @@ This project maintains **dual modules** for each algorithm:
 
 The project uses **AST (Abstract Syntax Tree) consistency tests** to ensure both versions remain functionally identical:
 
-```powershell
+```bash
 # Run consistency tests
-python -m pytest tests/test_ast_consistency.py -v
+uv run python -m pytest tests/test_ast_consistency.py -v
 ```
 
 This ensures that while the modules are **not DRY** (Don't Repeat Yourself), they are **algorithmically identical** and maintained through automated testing.
@@ -196,30 +175,17 @@ completion = calculate_working_completion_time(
 
 ## 🧪 Testing
 
-**PowerShell/Command Prompt:**
-```powershell
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test modules
-python -m pytest tests/test_explode_bom.py -v
-python -m pytest tests/test_working_calendar.py -v
-
-# Run AST consistency tests
-python -m pytest tests/test_ast_consistency.py -v
-```
-
-**Bash:**
+**Cross-platform:** All commands below work in bash, zsh, and PowerShell
 ```bash
 # Run all tests
-python -m pytest tests/ -v
+uv run python -m pytest tests/ -v
 
 # Run specific test modules
-python -m pytest tests/test_explode_bom.py -v
-python -m pytest tests/test_working_calendar.py -v
+uv run python -m pytest tests/test_explode_bom.py -v
+uv run python -m pytest tests/test_working_calendar.py -v
 
 # Run AST consistency tests
-python -m pytest tests/test_ast_consistency.py -v
+uv run python -m pytest tests/test_ast_consistency.py -v
 ```
 
 ## 📋 Data Requirements
@@ -265,4 +231,3 @@ All input files are provided in `./data/current/` for testing.
 
 ## 📄 License
 
-This project is designed for educational and development purposes.
