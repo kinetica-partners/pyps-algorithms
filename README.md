@@ -1,124 +1,228 @@
 # PyPS Scheduling Algorithms
 
-A simplified, portable repository containing two example planning algorithms for planning and scheduling with companion modules for use with xlwings lite.
+Two production-ready planning algorithms with Excel integration: **BOM Explosion** and **Working Calendar** calculations.
 
-## Overview
+## 🚀 Quick Start
 
-This repository provides two main scheduling modules:
-
-1. **BOM Explosion** - Explodes Bill of Materials with lead time calculations
-2. **Working Calendar** - Calculates working time completion with calendar rules and exceptions
-
-Both modules are designed to be fully portable with cross-platform compatible file paths that work identically on Windows, macOS, and Linux. The system uses YAML-based configuration for centralized path management.
-
-## Project Structure
-
-```
-PyPS_Scheduling_Algorithms/
-├── src/
-│   ├── config.py               # Portable path configuration module
-│   ├── explode_bom.py          # BOM explosion with main()
-│   └── working_calendar.py     # Working calendar with main()
-├── tests/
-│   ├── test_explode_bom.py     # BOM explosion tests
-│   ├── test_working_calendar.py # Working calendar tests
-│   └── test_data/
-│       ├── baseline.json       # Test baseline data
-│       └── refactor_baseline.json
-├── data/
-│   └── current/                # Primary input data directory
-│       ├── bom.csv
-│       ├── items.csv
-│       ├── independent_demand.csv
-│       ├── calendar_rules.csv
-│       └── calendar_exceptions.csv
-├── docs/                       # Documentation
-├── config.yaml                 # Portable path configuration
-├── main.py                     # Main entry point
-├── pyproject.toml             # Project configuration
-└── README.md
+### Option 1: Git Clone (Recommended)
+**PowerShell/Command Prompt (Windows):**
+```powershell
+git clone https://github.com/your-repo/pyps_algorithms.git
+cd pyps_algorithms
+pip install pandas pytest xlwings pyyaml
+python main.py
 ```
 
-## Installation
+**Bash (Linux/macOS):**
+```bash
+git clone https://github.com/your-repo/pyps_algorithms.git
+cd pyps_algorithms
+pip install pandas pytest xlwings pyyaml
+python main.py
+```
 
-1. Ensure you have Python 3.12+ installed
-2. Install dependencies:
-   ```bash
+### Option 2: Download ZIP
+1. [Download ZIP](https://github.com/your-repo/pyps_algorithms/archive/main.zip)
+2. Extract to your desired location
+3. Open PowerShell/Command Prompt in the extracted folder
+4. Run:
+   ```powershell
    pip install pandas pytest xlwings pyyaml
+   python main.py
    ```
 
-## Portable Configuration System
+## 📋 What You Get
 
-This project uses a YAML-based configuration system for cross-platform compatibility:
+### 1. **BOM Explosion Algorithm**
+Explodes Bill of Materials with lead time calculations for production planning.
 
-- **[`config.yaml`](config.yaml)** - Centralized path configuration
-- **[`src/config.py`](src/config.py)** - Configuration loader with pathlib.Path support
-- **Automatic root detection** - Finds project root regardless of execution directory
-- **Cross-platform paths** - Works identically on Windows, macOS, and Linux
+### 2. **Working Calendar Algorithm** 
+Calculates working time completion dates considering business calendars, holidays, and exceptions.
 
-The configuration system automatically:
-- Detects the project root directory
-- Resolves all paths relative to project root
-- Uses forward slashes in config, converts to OS-specific paths
-- Supports multiple datasets (current, test, baseline)
+### 3. **Excel Integration Ready**
+Both algorithms include **xlwings lite** modules for seamless Excel integration.
 
-## Usage
+## 🏗️ Project Structure
 
-### Option 1: Interactive Main Script
+```
+pyps_algorithms/
+├── src/                        # Main algorithms
+│   ├── config.py               # Configuration management
+│   ├── explode_bom.py          # BOM explosion algorithm
+│   └── working_calendar.py     # Working calendar algorithm
+├── xlwings_lite/               # Excel-compatible versions
+│   ├── explode_bom_lite.py     # BOM explosion for Excel
+│   └── working_calendar_lite.py # Working calendar for Excel
+├── excel/                      # Excel workbook examples
+│   └── Archive/                # Previous Excel versions
+├── data/current/               # Sample input data
+│   ├── bom.csv                 # Bill of materials
+│   ├── items.csv               # Item master data
+│   ├── independent_demand.csv  # Customer demand
+│   ├── calendar_rules.csv      # Working time rules
+│   └── calendar_exceptions.csv # Holidays & exceptions
+├── tests/                      # Comprehensive test suite
+├── config.yaml                 # Path configuration
+└── main.py                     # Interactive demo
+```
+
+## 🎯 Getting Started Examples
+
+### Run the Interactive Demo
+**PowerShell/Command Prompt:**
+```powershell
+python main.py
+```
+
+**Bash:**
 ```bash
 python main.py
 ```
-This provides an interactive menu to run either algorithm or both.
 
-### Option 2: Run Individual Modules
-```bash
-# BOM Explosion (uses current dataset by default)
+### Try Individual Algorithms
+**PowerShell/Command Prompt:**
+```powershell
+# BOM Explosion
 python src/explode_bom.py
 
-# Working Calendar Demo
+# Working Calendar
 python src/working_calendar.py
 ```
 
-### Option 3: Import as Modules (Portable)
-```python
-from src.explode_bom import bom_explosion_from_csv
-from src.working_calendar import calculate_working_completion_time
+**Bash:**
+```bash
+# BOM Explosion
+python src/explode_bom.py
 
-# BOM explosion with portable configuration
+# Working Calendar
+python src/working_calendar.py
+```
+
+## 📊 Excel Integration with xlwings
+
+### Step 1: Install xlwings Add-in
+1. **Install from Microsoft AppSource**: [xlwings Add-in](https://appsource.microsoft.com/en-us/product/office/WA200001351)
+2. **Alternative**: Install via xlwings CLI:
+   ```powershell
+   xlwings addin install
+   ```
+
+### Step 2: Using the Pre-built Excel Examples
+The `excel/` folder contains ready-to-use Excel workbooks with the algorithms already integrated. These examples demonstrate both algorithms working with real Excel data.
+
+### Step 3: Creating Your Own Excel Integration
+
+#### Important: One Module Per Workbook
+⚠️ **xlwings Limitation**: Each Excel workbook can only contain **ONE** xlwings lite module. Do not attempt to paste multiple `_lite.py` modules into the same Excel file.
+
+#### Using xlwings Lite Modules
+The `xlwings_lite/` folder contains self-contained modules you can add to new Excel workbooks:
+
+**For BOM Explosion:**
+1. Create a new Excel workbook
+2. Copy the entire contents of `xlwings_lite/explode_bom_lite.py`
+3. In Excel, press `Alt + F11` to open VBA editor
+4. Insert a new module and paste the Python code
+5. Use the `@func` decorated functions directly in Excel cells
+
+**For Working Calendar:**
+1. Create a new Excel workbook  
+2. Copy the entire contents of `xlwings_lite/working_calendar_lite.py`
+3. Follow the same VBA integration steps
+4. Use functions like `=calculate_working_completion_time()` in Excel
+
+## 🔄 Dual Module Architecture
+
+### Why Two Versions of Each Algorithm?
+
+This project maintains **dual modules** for each algorithm:
+
+1. **Main modules** (`src/`): Full-featured with file I/O, configuration, and testing
+2. **Lite modules** (`xlwings_lite/`): Self-contained, Excel-compatible versions
+
+### Key Differences:
+
+| Feature | Main Modules | Lite Modules |
+|---------|-------------|--------------|
+| **Dependencies** | Uses `config.yaml` and file system | Self-contained, no external files |
+| **Data Input** | Reads from CSV files | Accepts Excel data ranges |
+| **Error Handling** | Comprehensive with file validation | Simplified for Excel compatibility |
+| **Testing** | Full test suite coverage | Validated through AST consistency tests |
+| **Excel Integration** | Requires file paths | Direct Excel data integration |
+
+### AST Consistency Testing
+
+The project uses **AST (Abstract Syntax Tree) consistency tests** to ensure both versions remain functionally identical:
+
+```powershell
+# Run consistency tests
+python -m pytest tests/test_ast_consistency.py -v
+```
+
+This ensures that while the modules are **not DRY** (Don't Repeat Yourself), they are **algorithmically identical** and maintained through automated testing.
+
+## 📝 Algorithm Usage Examples
+
+### BOM Explosion
+```python
+# Main module (file-based)
+from src.explode_bom import bom_explosion_from_csv
 result = bom_explosion_from_csv(dataset='current')
 
-# Or specify different dataset
-result = bom_explosion_from_csv(dataset='test')
+# Lite module (Excel-compatible)
+from xlwings_lite.explode_bom_lite import explode_bom_iterative
+result = explode_bom_iterative(bom_data, items_data, demand_data)
+```
 
-# Working calendar calculation (uses portable paths automatically)
-completion_time = calculate_working_completion_time(
+### Working Calendar
+```python
+# Main module (file-based)
+from src.working_calendar import calculate_working_completion_time
+completion = calculate_working_completion_time(
     start_datetime=datetime(2025, 1, 6, 9, 0),
     jobtime=120,  # minutes
     calendar_id="default"
 )
+
+# Lite module (Excel-compatible)
+from xlwings_lite.working_calendar_lite import calculate_working_completion_time
+completion = calculate_working_completion_time(
+    start_datetime=44927.375,  # Excel date serial
+    jobtime=120,
+    calendar_rules_data=rules_range,
+    calendar_exceptions_data=exceptions_range
+)
 ```
 
-### Portable Path Configuration
+## 🧪 Testing
 
-The system automatically handles paths based on [`config.yaml`](config.yaml):
+**PowerShell/Command Prompt:**
+```powershell
+# Run all tests
+python -m pytest tests/ -v
 
-```python
-from src.config import PathConfig
+# Run specific test modules
+python -m pytest tests/test_explode_bom.py -v
+python -m pytest tests/test_working_calendar.py -v
 
-# Get configuration instance
-config = PathConfig()
-
-# Access any configured path
-bom_file = config.get_file_path('current', 'bom')  # Returns pathlib.Path
-data_dir = config.get_data_path('current')         # Returns pathlib.Path
-test_baseline = config.get_test_baseline()         # Returns pathlib.Path
-
-# All paths work cross-platform automatically
-print(bom_file)  # Windows: WindowsPath('C:/project/data/current/bom.csv')
-                 # Linux:   PosixPath('/project/data/current/bom.csv')
+# Run AST consistency tests
+python -m pytest tests/test_ast_consistency.py -v
 ```
 
-## Data Requirements
+**Bash:**
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test modules
+python -m pytest tests/test_explode_bom.py -v
+python -m pytest tests/test_working_calendar.py -v
+
+# Run AST consistency tests
+python -m pytest tests/test_ast_consistency.py -v
+```
+
+## 📋 Data Requirements
 
 ### BOM Explosion Input Files
 - `bom.csv` - Bill of materials relationships
@@ -129,81 +233,36 @@ print(bom_file)  # Windows: WindowsPath('C:/project/data/current/bom.csv')
 - `calendar_rules.csv` - Working time rules by weekday
 - `calendar_exceptions.csv` - Holiday and exception schedules
 
-All input files should be placed in `./data/current/` directory.
+All input files are provided in `./data/current/` for testing.
 
-## Testing
-
-Run the comprehensive test suite:
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test modules
-python -m pytest tests/test_explode_bom.py -v
-python -m pytest tests/test_working_calendar.py -v
-```
-
-## Algorithms
-
-### 1. BOM Explosion
-- **Purpose**: Explodes Bill of Materials to calculate component demand
-- **Features**: 
-  - Multi-level BOM explosion
-  - Lead time offset calculations
-  - Date-based demand scheduling
-  - CSV and Excel integration
-
-### 2. Working Calendar
-- **Purpose**: Calculates working time completion considering calendar rules
-- **Features**:
-  - Custom calendar definitions
-  - Holiday and exception handling
-  - Excel data type compatibility
-  - Optimized interval-based calculations
-
-## Excel Integration
-
-Both modules support Excel integration via xlwings:
-- **BOM Explosion**: `bom_explosion_from_excel()` function
-- **Working Calendar**: `@func` decorated Excel functions
-
-## Dependencies
+## 🔧 Dependencies
 
 - **`pandas`** - Data manipulation and CSV handling
 - **`pytest`** - Testing framework
-- **`pyyaml`** - YAML configuration parsing for portable paths
-- **`xlwings`** - Excel integration (optional)
+- **`pyyaml`** - YAML configuration parsing
+- **`xlwings`** - Excel integration
 
-## Cross-Platform Portability Features
+## 🏆 Key Features
 
-This repository is designed to be fully portable across operating systems:
+### Production-Ready Algorithms
+- **BOM Explosion**: Multi-level explosion with lead time calculations
+- **Working Calendar**: Business calendar with holidays and exceptions
 
-### Path Management
-- **YAML Configuration**: Single source of truth for all file paths in [`config.yaml`](config.yaml)
-- **pathlib.Path**: Cross-platform path handling (Windows backslashes, Unix forward slashes)
-- **Automatic Root Detection**: Finds project root regardless of execution directory
-- **Relative Path Resolution**: All paths resolved relative to project root
+### Excel Integration
+- **Self-contained modules** for easy Excel integration
+- **Compatible with xlwings lite** for seamless Excel functions
+- **Pre-built Excel examples** ready to use
 
-### Dataset Flexibility
-- **Multiple Datasets**: Support for `current`, `test`, and custom dataset configurations
-- **Configurable Structure**: Easy to add new datasets or modify existing ones
-- **Consistent API**: Same function calls work across all datasets
+### Dual Architecture Benefits
+- **Main modules**: Full testing and file integration
+- **Lite modules**: Excel-compatible with minimal dependencies
+- **AST consistency**: Automated testing ensures identical functionality
 
-### Import Compatibility
-- **Package vs Script**: Modules work both as packages (from tests) and direct scripts
-- **Fallback Imports**: Automatic fallback between relative and absolute imports
-- **Cross-Platform Execution**: Identical behavior on Windows, macOS, and Linux
+### Cross-Platform Support
+- **Windows PowerShell** and **Command Prompt** compatible
+- **Linux/macOS Bash** compatible
+- **Automatic path resolution** for any operating system
 
-## Development
-
-This repository is designed to be:
-- **Portable**: Cross-platform compatible with YAML-based path configuration
-- **Simple**: Two core modules with centralized configuration management
-- **Well-tested**: Comprehensive test coverage with portable test data
-- **Documented**: Clear usage examples and cross-platform API documentation
-- **Maintainable**: DRY principle with single source of truth for paths
-
-## License
+## 📄 License
 
 This project is designed for educational and development purposes.
