@@ -15,8 +15,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from working_calendar import (
-    excel_boolean_to_python,
-    excel_time_to_string,
+    convert_excel_boolean,
+    convert_excel_time,
     parse_time_string,
     datetime_to_excel,
     load_calendar_rules,
@@ -63,7 +63,7 @@ class TestExcelDataTypeConversions:
         ]
         
         for input_val, expected in test_cases:
-            result = excel_boolean_to_python(input_val)
+            result = convert_excel_boolean(input_val)
             assert result == expected, f"Failed for {input_val}: expected {expected}, got {result}"
     
     def test_excel_time_conversion(self):
@@ -77,7 +77,7 @@ class TestExcelDataTypeConversions:
         ]
         
         for excel_time, expected in test_cases:
-            result = excel_time_to_string(excel_time)
+            result = convert_excel_time(excel_time)
             assert result == expected, f"Failed for {excel_time}: expected {expected}, got {result}"
     
     def test_parse_time_string(self):
@@ -657,8 +657,8 @@ class TestWorkingCalendarPathHandling:
         
         # Check that all required functions are available
         required_functions = [
-            'excel_boolean_to_python',
-            'excel_time_to_string',
+            'convert_excel_boolean',
+            'convert_excel_time',
             'parse_time_string',
             'datetime_to_excel',
             'load_calendar_rules',
