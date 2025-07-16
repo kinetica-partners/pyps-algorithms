@@ -39,8 +39,8 @@ class TestASTConsistency:
         
         # Define core algorithmic functions that MUST be identical
         core_functions = {
-            'excel_time_to_string',
-            'excel_boolean_to_python',
+            'convert_excel_time',
+            'convert_excel_boolean',
             'parse_time_string',
             'load_calendar_rules',
             'build_working_intervals',
