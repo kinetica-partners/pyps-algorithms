@@ -231,3 +231,12 @@ All input files are provided in `./data/current/` for testing.
 
 ## 📄 License
 
+## License
+
+This project is licensed under the MIT License.
+
+### Third-Party Dependencies
+
+- **xlwings**: BSD 3-clause license (compatible with MIT)
+- **pandas**: BSD 3-clause license (compatible with MIT)
+- **pytest**: MIT license (compatible with MIT)

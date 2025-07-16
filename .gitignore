@@ -9,8 +9,17 @@ wheels/
 # Virtual environments
 .venv
 
-# Excel files
-*.xlsx
-*.xlsm
-*.xlsb
-*.xls
+# Excel temporary files
+~$*
+*.tmp
+
+# Excel temporary
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
+# Excel Backup File
+*.xlk
+
+# Exce Archive
+C:\PyPS_Scheduling_Algorithms\excel\Archive\
