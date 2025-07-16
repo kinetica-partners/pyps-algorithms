@@ -1,6 +1,6 @@
 # PyPS Scheduling Algorithms
 
-A simplified, portable repository containing two core scheduling algorithms for production planning and scheduling with cross-platform path management.
+A simplified, portable repository containing two example planning algorithms for planning and scheduling with companion modules for use with xlwings lite.
 
 ## Overview
 
