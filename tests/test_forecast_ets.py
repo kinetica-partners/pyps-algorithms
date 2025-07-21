@@ -272,31 +272,45 @@ class TestForecastETS:
             
             results[item] = {'mae': mae, 'percentage_mae': percentage_mae, 'mean_actual': mean_actual}
         
-        # Acceptance criteria using %MAE (tightened based on observed error range)
+        # Acceptance criteria using %MAE - use logical mapping instead of string matching
+        # Create reverse mapping to identify item types reliably
+        reverse_mapping = {v: k for k, v in ITEM_NAME_MAPPING.items()}
+        
         for item, metrics in results.items():
             percentage_mae = metrics['percentage_mae']
             mae = metrics['mae']
             
-            if 'flat' in item and 'complex' not in item:
+            # Get logical item type from mapping
+            logical_name = reverse_mapping.get(item, 'unknown')
+            
+            if logical_name == 'flat_series':
                 # Simple flat series - should have very good accuracy
                 assert percentage_mae < SIMPLE_FLAT_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
                 assert mae < SIMPLE_FLAT_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
-            elif 'trend' in item and 'noise' not in item and 'complex' not in item:
-                # Simple trend series  
+            elif logical_name == 'trend_series':
+                # Simple trend series
                 assert percentage_mae < SIMPLE_TREND_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
                 assert mae < SIMPLE_TREND_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
-            elif 'noise' in item and 'complex' not in item:
+            elif logical_name == 'trend_noise_series':
                 # Simple noisy series
                 assert percentage_mae < SIMPLE_NOISE_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
                 assert mae < SIMPLE_NOISE_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
-            elif 'complex' in item and 'noise' not in item:
+            elif logical_name == 'complex_flat_series':
                 # Complex series without noise
                 assert percentage_mae < COMPLEX_FLAT_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
                 assert mae < COMPLEX_FLAT_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
-            elif 'complex' in item and 'noise' in item:
+            elif logical_name == 'complex_trend_series':
+                # Complex trend series without noise
+                assert percentage_mae < COMPLEX_FLAT_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
+                assert mae < COMPLEX_FLAT_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
+            elif logical_name == 'complex_trend_noise_series':
                 # Complex noisy series - most challenging
                 assert percentage_mae < COMPLEX_NOISE_MAX_PERCENTAGE_MAE, f"{item} %MAE too high: {percentage_mae:.2f}%"
                 assert mae < COMPLEX_NOISE_MAX_ABS_MAE, f"{item} MAE too high: {mae:.2f}"
+            else:
+                # Fallback for unknown items - use most lenient criteria
+                assert percentage_mae < COMPLEX_NOISE_MAX_PERCENTAGE_MAE, f"{item} (unknown type) %MAE too high: {percentage_mae:.2f}%"
+                assert mae < COMPLEX_NOISE_MAX_ABS_MAE, f"{item} (unknown type) MAE too high: {mae:.2f}"
 
     def test_seasonal_pattern_detection(self, flat_series):
         """Test that seasonal patterns are detected and forecasted."""
