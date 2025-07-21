@@ -4,8 +4,9 @@ An repository with example planning and scheduling algorithms that can work as a
 
 1. BOM Explosion - Explodes Bill of Materials with lead time calculations
 2. Working Calendar - Calculates working time completion with calendar rules and exceptions
+3. Forecast ETS - Exponential Smoothing forecasting with comprehensive validation and CSV output
 
-The core functions are included in ./src along with companion modules designed to function in xlwings lite.
+The core functions are included in ./src along with companion modules designed to function in xlwings lite (except Forecast ETS which is designed for local execution with CSV integration).
 
 ## 🚀 Quick Start
 
@@ -35,11 +36,14 @@ uv run python src/working_calendar.py
 ### 1. **BOM Explosion Algorithm**
 Explodes Bill of Materials with lead time calculations for production planning.
 
-### 2. **Working Calendar Algorithm** 
+### 2. **Working Calendar Algorithm**
 Calculates working time completion dates considering business calendars, holidays, and exceptions.
 
-### 3. **Excel Integration Ready**
-Both algorithms include **xlwings lite** modules for seamless Excel integration.
+### 3. **Forecast ETS Algorithm**
+Exponential Smoothing (ETS) time series forecasting with automatic data generation, comprehensive validation, and CSV output for Excel integration.
+
+### 4. **Excel Integration Ready**
+BOM Explosion and Working Calendar algorithms include **xlwings lite** modules for seamless Excel integration. Forecast ETS is designed for local execution with CSV output that integrates with `excel/Forecast_ETS_v01.01.xlsm`.
 
 ## 🏗️ Project Structure
 
@@ -48,13 +52,15 @@ pyps_algorithms/
 ├── src/                              # Main algorithms
 │   ├── config.py                     # Configuration management
 │   ├── explode_bom.py                # BOM explosion algorithm
-│   └── working_calendar.py           # Working calendar algorithm
+│   ├── working_calendar.py           # Working calendar algorithm
+│   └── forecast_ets.py               # ETS forecasting algorithm
 ├── xlwings_lite/                     # Excel-compatible versions
 │   ├── explode_bom_lite.py           # BOM explosion for Excel
 │   └── working_calendar_lite.py      # Working calendar for Excel
 ├── excel/                            # Excel workbook examples
-│   ├── BOM_Explosion_v01.xx.xlsm     # Working time rules
-│   └── Working_Calendar_v01.xx.xlsm  # Holidays & exceptions
+│   ├── BOM_Explosion_v01.xx.xlsm     # BOM explosion workbook
+│   ├── Working_Calendar_v01.xx.xlsm  # Working calendar workbook
+│   └── Forecast_ETS_v01.xx.xlsm      # ETS forecasting integration
 ├── data/current/                     # Sample input data
 │   ├── bom.csv                       # Bill of materials
 │   ├── items.csv                     # Item master data
@@ -75,6 +81,9 @@ uv run python src/explode_bom.py
 
 # Working Calendar
 uv run python src/working_calendar.py
+
+# ETS Forecasting (with comprehensive test data generation)
+uv run python -m pytest tests/test_forecast_ets.py -v
 ```
 
 ## 📊 Excel Integration with xlwings
@@ -173,6 +182,24 @@ completion = calculate_working_completion_time(
 )
 ```
 
+### ETS Forecasting
+```python
+# Main module (generates comprehensive test data and forecasts)
+from src.forecast_ets import generate_forecast_ets_weekly
+
+# Generate forecasts for time series data
+forecast_df = generate_forecast_ets_weekly(
+    series=time_series_data,  # DataFrame with 'item', 'period', 'quantity' columns
+    forecast_range=26,        # 26 weeks ahead
+    trend="add",             # Additive trend
+    seasonal="add",          # Additive seasonality
+    seasonal_periods=52      # 52 weeks seasonal cycle
+)
+
+# Note: No xlwings lite version - designed for local execution with CSV output
+# Integrates with excel/Forecast_ETS_v01.01.xlsm via CSV files
+```
+
 ## 🧪 Testing
 
 **Cross-platform:** All commands below work in bash, zsh, and PowerShell
@@ -183,10 +210,30 @@ uv run python -m pytest tests/ -v
 # Run specific test modules
 uv run python -m pytest tests/test_explode_bom.py -v
 uv run python -m pytest tests/test_working_calendar.py -v
+uv run python -m pytest tests/test_forecast_ets.py -v
 
 # Run AST consistency tests
 uv run python -m pytest tests/test_ast_consistency.py -v
 ```
+
+### ETS Forecasting Tests & Data Generation
+
+The ETS forecasting module includes **automatic test data generation** with comprehensive validation:
+
+```bash
+# Run ETS tests (automatically generates training, test, and forecast CSV files)
+uv run python -m pytest tests/test_forecast_ets.py -v
+```
+
+This automatically creates:
+- `tests/test_data/ets_training_data.csv` - 936 training records (6 items × 156 weeks)
+- `tests/test_data/ets_test_data.csv` - 156 test records for validation
+- `tests/test_data/ets_forecast_data.csv` - 156 forecast records for Excel integration
+
+**Time Series Patterns Generated:**
+- **Simple Patterns**: Sinusoidal seasonality with linear trends
+- **Complex Patterns**: Dual-peak seasonality with non-linear trends and higher noise
+- **Validation**: %MAE criteria from 15-50% based on pattern complexity
 
 ## 📋 Data Requirements
 
@@ -207,6 +254,8 @@ All input files are provided in `./data/current/` for testing.
 - **`pytest`** - Testing framework
 - **`pyyaml`** - YAML configuration parsing
 - **`xlwings`** - Excel integration
+- **`statsmodels`** - ETS forecasting models
+- **`numpy`** - Numerical computations for forecasting
 
 ## 🏆 Key Features
 
