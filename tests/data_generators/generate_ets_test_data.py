@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 # ==============================================================================
 
 # Data generation parameters
-DEFAULT_START_DATE = "2022-01-03"  # Start on a Monday
-DEFAULT_N_TRAINING_PERIODS = 156   # 156 weeks (3 years) for non-linear trend
-DEFAULT_N_TEST_PERIODS = 26        # 26 weeks for testing (half year)
+DEFAULT_START_DATE = "2021-01-04"  # Start on a Monday
+DEFAULT_N_TRAINING_PERIODS = 156   # 156 weeks (3 years) for training
+DEFAULT_N_TEST_PERIODS = 52        # 52 weeks (1 year) for testing
 DEFAULT_SEASONAL_PERIODS = 52      # 52 weeks in a year
 DEFAULT_BASE_LEVEL = 100.0         # Base demand level
 DEFAULT_SEASONAL_AMPLITUDE = 20.0  # Amplitude of seasonal variation
@@ -103,7 +103,7 @@ def generate_ets_test_data(
     # Generate date range for training + test periods
     total_periods = n_training_periods + n_test_periods
     start = pd.to_datetime(start_date)
-    dates = pd.date_range(start=start, periods=total_periods, freq='W')
+    dates = pd.date_range(start=start, periods=total_periods, freq='W-MON')
     
     # Create time index
     time_index = np.arange(total_periods)
@@ -245,8 +245,8 @@ if __name__ == "__main__":
     os.makedirs(test_data_dir, exist_ok=True)
     
     # Save to CSV files
-    train_data.to_csv('tests/test_data/ets_training_data.csv', index=False)
-    test_data.to_csv('tests/test_data/ets_test_data.csv', index=False)
+    train_data.to_csv('tests/test_data/ets_training.csv', index=False)
+    test_data.to_csv('tests/test_data/ets_test.csv', index=False)
     
     # Print summary statistics
     print("Training Data Summary:")

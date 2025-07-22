@@ -172,19 +172,11 @@ class TestTestDataPaths:
     def test_get_test_data_path_with_filename(self):
         """Test getting specific test data file."""
         config = PathConfig()
-        path = config.get_test_data_path('baseline.json')
+        path = config.get_test_data_path('ets_test_data.csv')
         assert isinstance(path, Path)
         assert path.is_absolute()
-        assert str(path).endswith('baseline.json')
+        assert str(path).endswith('ets_test_data.csv')
         assert 'test_data' in str(path)
-    
-    def test_get_test_file_path_baseline(self):
-        """Test getting test baseline file path."""
-        config = PathConfig()
-        path = config.get_test_file_path('baseline')
-        assert isinstance(path, Path)
-        assert path.is_absolute()
-        assert str(path).endswith('baseline.json')
 
 
 class TestSourcePaths:
@@ -287,10 +279,10 @@ class TestConvenienceFunctions:
     
     def test_get_test_data_path_function_with_filename(self):
         """Test get_test_data_path convenience function with filename."""
-        path = get_test_data_path('baseline.json')
+        path = get_test_data_path('ets_test_data.csv')
         assert isinstance(path, Path)
         assert path.is_absolute()
-        assert str(path).endswith('baseline.json')
+        assert str(path).endswith('ets_test_data.csv')
     
     def test_get_src_path_function(self):
         """Test get_src_path convenience function."""
@@ -327,9 +319,6 @@ class TestActualFileAccess:
     def test_test_data_files_exist(self):
         """Test that test data files exist."""
         config = PathConfig()
-        
-        baseline_path = config.get_test_file_path('baseline')
-        assert baseline_path.exists(), f"Baseline file should exist at {baseline_path}"
         
         test_dir = config.get_test_data_path()
         assert test_dir.exists(), f"Test data directory should exist at {test_dir}"

@@ -37,7 +37,7 @@ EXPECTED_COLUMNS = {'item', 'period', 'quantity'}
 DEFAULT_FORECAST_RANGE = 26  # 26 weeks ahead
 SEASONAL_PERIODS = 52       # 52 weeks in a year
 
-# %MAE Acceptance Criteria (based on observed error range: 2.5e-14 to 14.03)
+# %MAE Acceptance Criteria (based on observed error range)
 # Simple patterns (sinusoidal seasonality, linear trend)
 SIMPLE_FLAT_MAX_PERCENTAGE_MAE = 15.0    # Simple flat series
 SIMPLE_FLAT_MAX_ABS_MAE = 20.0

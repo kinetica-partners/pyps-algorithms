@@ -80,9 +80,6 @@ class PathConfig:
             return test_data_path / filename
         return test_data_path
     
-    def get_test_file_path(self, file_type: str) -> Path:
-        """Get specific test file path"""
-        return self.get_path(self._config["test_files"][file_type])
     
     def get_src_path(self, filename: Optional[str] = None) -> Path:
         """Get source directory or specific source file"""

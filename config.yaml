@@ -25,10 +25,6 @@ test:
   root: "tests"
   data: "tests/test_data"
 
-# Test data files
-test_files:
-  baseline: "tests/test_data/baseline.json"
-  refactor_baseline: "tests/test_data/refactor_baseline.json"
 
 # Source directories
 src:
