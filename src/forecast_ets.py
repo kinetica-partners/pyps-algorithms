@@ -1101,7 +1101,7 @@ def main():
     # Forecast parameters
     FORECAST_RANGE = 52        # Number of periods to forecast ahead
     ROLLING_PERIODS = 52       # Number of periods for rolling forecast (1 year)
-    LAG = 1                   # Forecast lag (1 = 1-period ahead)
+    LAG = 4                   # Forecast lag (1 = 1-period ahead)
     SEASONAL_PERIODS = 52     # Seasonal cycle length
     
     # ETS model parameters
