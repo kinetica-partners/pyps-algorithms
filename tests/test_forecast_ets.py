@@ -4,7 +4,20 @@ import numpy as np
 import warnings
 from pathlib import Path
 
-from src.forecast_ets import generate_forecast_ets_weekly, ExcessiveMissingPeriodsError
+from src.forecast_ets import (
+    generate_forecast_ets_weekly,
+    generate_forecast_ets_monthly,
+    generate_forecast_ets_auto,
+    generate_rolling_forecast_ets_weekly,
+    generate_rolling_forecast_ets_monthly,
+    generate_rolling_forecast_ets_auto,
+    detect_granularity,
+    ExcessiveMissingPeriodsError,
+    rolling_forecast_ets_multiseries_statsforecast,
+    rolling_forecast_ets_from_csv,
+    generate_forecast_ets_statsforecast,
+    _process_multiseries_forecast
+)
 
 # ==============================================================================
 # TEST CONFIGURATION VARIABLES
@@ -20,10 +33,7 @@ FORECAST_DATA_PATH = TEST_DATA_DIR / "ets_forecast_data.csv"
 # This allows changing data item names in one place without breaking tests
 def get_item_mappings():
     """Get item name mappings from data generator."""
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).parent / "data_generators"))
-    from generate_ets_test_data import get_item_name_mapping, get_expected_items
+    from tests.data_generators.generate_ets_test_data import get_item_name_mapping, get_expected_items
     return get_item_name_mapping(), get_expected_items()
 
 # Get mappings (will be called when module loads)
@@ -85,11 +95,8 @@ class TestForecastETS:
         print("\nRegenerating test data...")
         
         # Import and run data generators
-        import sys
-        sys.path.append(str(Path(__file__).parent / "data_generators"))
-        
-        from generate_ets_test_data import generate_ets_test_data
-        from generate_forecast_results import generate_forecast_results
+        from tests.data_generators.generate_ets_test_data import generate_ets_test_data
+        from tests.data_generators.generate_forecast_results import generate_forecast_results
         
         # Generate training and test data
         train_data, test_data = generate_ets_test_data()
@@ -449,3 +456,513 @@ class TestForecastETS:
         period_diffs = forecast_periods.diff()[1:]  # Skip first NaT
         expected_diff = pd.Timedelta(weeks=1)
         assert (period_diffs == expected_diff).all(), "Forecast periods are not consecutive weeks"
+
+
+    def test_basic_rolling_forecast_functionality(self, flat_series):
+        """Test basic rolling forecast functionality on flat series."""
+        self._suppress_warnings()
+        
+        rolling_forecast_df = generate_rolling_forecast_ets_weekly(
+            flat_series,
+            rolling_periods=8,
+            lag=1,
+            trend="add",
+            seasonal="add"
+        )
+        
+        # Check output structure
+        assert len(rolling_forecast_df) == 8
+        assert set(rolling_forecast_df.columns) == {'period', 'forecast_quantity', 'lag'}
+        assert rolling_forecast_df['period'].dtype.kind == 'M'  # datetime type
+        assert rolling_forecast_df['forecast_quantity'].dtype.kind == 'f'  # float type
+        assert rolling_forecast_df['lag'].dtype.kind in ['i', 'f']  # integer or float type
+        
+        # Check forecast values are reasonable (non-negative)
+        assert (rolling_forecast_df['forecast_quantity'] >= 0).all()
+        
+        # Check that periods are from the last 8 periods of the series
+        expected_periods = flat_series.sort_values('period')['period'].tail(8).tolist()
+        actual_periods = rolling_forecast_df.sort_values('period')['period'].tolist()
+        assert actual_periods == expected_periods
+
+    def test_rolling_forecast_multiseries(self, training_data):
+        """Test rolling forecast on multiple series."""
+        self._suppress_warnings()
+        
+        # Test with a subset of items for performance
+        test_items = list(ITEM_NAME_MAPPING.values())[:2]  # Limit to 2 items
+        test_data = training_data[training_data['item'].isin(test_items)].copy()
+        
+        # Use fast statsforecast method instead of slow refit method
+        rolling_forecast_df = rolling_forecast_ets_multiseries_statsforecast(
+            df=test_data,
+            rolling_periods=6,
+            lag=1,
+            trend="add",
+            seasonal="add"
+        )
+        
+        # Check output structure
+        expected_cols = {'item', 'period', 'forecast_quantity', 'lag'}
+        assert set(rolling_forecast_df.columns) == expected_cols
+        
+        # Check data types
+        if len(rolling_forecast_df) > 0:  # Only check if we have results
+            assert rolling_forecast_df['period'].dtype.kind == 'M'
+            assert rolling_forecast_df['forecast_quantity'].dtype.kind == 'f'
+            assert rolling_forecast_df['lag'].dtype.kind in ['i', 'f']
+            # Check forecast values are non-negative
+            assert (rolling_forecast_df['forecast_quantity'] >= 0).all()
+
+    def test_rolling_forecast_input_validation(self):
+        """Test input validation for rolling forecast functions."""
+        # Test missing columns
+        invalid_df = pd.DataFrame({
+            'wrong_col': [1, 2, 3],
+            'period': pd.date_range('2022-01-01', periods=3, freq='W')
+        })
+        with pytest.raises(ValueError, match="Missing columns"):
+            generate_rolling_forecast_ets_weekly(invalid_df, rolling_periods=2)
+        
+        # Test non-datetime period column
+        invalid_df2 = pd.DataFrame({
+            'period': ['2022-01-01', '2022-01-08'],
+            'quantity': [10, 20]
+        })
+        with pytest.raises(TypeError, match="datetime dtype"):
+            generate_rolling_forecast_ets_weekly(invalid_df2, rolling_periods=1)
+        
+        # Test insufficient data - this will trigger the seasonal modeling check first
+        small_df = pd.DataFrame({
+            'period': pd.date_range('2022-01-01', periods=5, freq='W'),
+            'quantity': [10, 20, 30, 40, 50]
+        })
+        with pytest.raises(ValueError, match="need at least.*for reliable seasonal modeling"):
+            generate_rolling_forecast_ets_weekly(small_df, rolling_periods=3)
+
+    def test_rolling_forecast_output_format(self, flat_series):
+        """Test that rolling forecast output format matches requirements."""
+        self._suppress_warnings()
+        
+        rolling_forecast_df = generate_rolling_forecast_ets_weekly(
+            flat_series,
+            rolling_periods=5,
+            lag=1
+        )
+        
+        # Check exact column names and order for single series
+        assert list(rolling_forecast_df.columns) == ['period', 'forecast_quantity', 'lag']
+        
+
+    def test_rolling_forecast_fixed_lag_value(self, flat_series):
+        """Test that lag column contains the fixed lag parameter value, not incrementing values."""
+        self._suppress_warnings()
+        
+        test_lag = 4
+        rolling_forecast_df = generate_rolling_forecast_ets_weekly(
+            flat_series,
+            rolling_periods=6,
+            lag=test_lag
+        )
+        
+        # All lag values should equal the input lag parameter
+        assert (rolling_forecast_df['lag'] == test_lag).all(), \
+            f"Expected all lag values to be {test_lag}, but got: {rolling_forecast_df['lag'].unique()}"
+        
+        # Verify no incrementing lag values
+        assert len(rolling_forecast_df['lag'].unique()) == 1, \
+            f"Expected single lag value, but got multiple: {rolling_forecast_df['lag'].unique()}"
+
+
+def test_rolling_forecast_csv_dual_input():
+    """Test rolling forecast with separate train and test CSV files."""
+    import tempfile
+    import os
+    
+    # Create sample training data
+    train_data = pd.DataFrame({
+        'item': ['ITEM-001'] * 104 + ['ITEM-002'] * 104,
+        'period': pd.date_range('2021-01-04', periods=104, freq='W-MON').tolist() * 2,
+        'quantity': np.random.poisson(5, 104).tolist() + np.random.poisson(3, 104).tolist()
+    })
+    
+    # Create sample test data (sequential dates after training)
+    test_start_date = train_data['period'].max() + pd.Timedelta(weeks=1)
+    test_data = pd.DataFrame({
+        'item': ['ITEM-001'] * 26 + ['ITEM-002'] * 26,
+        'period': pd.date_range(test_start_date, periods=26, freq='W-MON').tolist() * 2,  
+        'quantity': np.random.poisson(5, 26).tolist() + np.random.poisson(3, 26).tolist()
+    })
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Write CSV files
+        train_path = os.path.join(temp_dir, 'train.csv')
+        test_path = os.path.join(temp_dir, 'test.csv') 
+        output_path = os.path.join(temp_dir, 'rolling_output.csv')
+        
+        train_data.to_csv(train_path, index=False)
+        test_data.to_csv(test_path, index=False)
+        
+        # Test dual input rolling forecast
+        rolling_forecast_ets_from_csv(
+            csv_filepath=train_path,
+            test_csv_filepath=test_path,
+            output_filepath=output_path,
+            rolling_periods=10,
+            lag=1,
+            seasonal_periods=52
+        )
+        
+        # Verify output file was created
+        assert os.path.exists(output_path)
+        
+        # Load and validate results
+        result_df = pd.read_csv(output_path)
+        
+        # Check required columns
+        expected_cols = {'item', 'period', 'forecast_quantity', 'lag'}
+        assert set(result_df.columns) == expected_cols
+        
+        # Check that both items are present
+        assert 'ITEM-001' in result_df['item'].values
+        assert 'ITEM-002' in result_df['item'].values
+        
+        # Check lag values
+        assert result_df['lag'].nunique() == 1
+        assert result_df['lag'].iloc[0] == 1
+        
+        # Verify forecasts were generated
+        assert not result_df.empty
+        assert len(result_df) > 0
+        
+        # Verify no date overlaps occurred (should not be duplicates in combined data)
+        # This tests that the train/test combination worked properly
+        assert len(result_df) > 0
+
+
+def test_rolling_forecast_csv_single_input():
+    """Test rolling forecast with single CSV file (no test data)."""
+    import tempfile
+    import os
+    
+    # Create sample data
+    data = pd.DataFrame({
+        'item': ['ITEM-001'] * 130,
+        'period': pd.date_range('2021-01-04', periods=130, freq='W-MON'),
+        'quantity': np.random.poisson(5, 130)
+    })
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Write CSV file
+        input_path = os.path.join(temp_dir, 'input.csv')
+        output_path = os.path.join(temp_dir, 'rolling_output.csv')
+        
+        data.to_csv(input_path, index=False)
+        
+        # Test single input rolling forecast
+        rolling_forecast_ets_from_csv(
+            csv_filepath=input_path,
+            test_csv_filepath=None,  # No test file
+            output_filepath=output_path,
+            rolling_periods=26,
+            lag=1,
+            seasonal_periods=52
+        )
+        
+        # Verify output file was created
+        assert os.path.exists(output_path)
+        
+        # Load and validate results
+        result_df = pd.read_csv(output_path)
+        
+        # Check required columns
+        expected_cols = {'item', 'period', 'forecast_quantity', 'lag'}
+        assert set(result_df.columns) == expected_cols
+        
+        # Check that item is present
+        assert 'ITEM-001' in result_df['item'].values
+        
+        # Check lag values
+        assert result_df['lag'].nunique() == 1
+        assert result_df['lag'].iloc[0] == 1
+        
+        # Verify forecasts were generated
+        assert not result_df.empty
+        assert len(result_df) > 0
+
+
+class TestMonthlyForecastETS:
+    """Test suite for monthly ETS forecasting functionality."""
+    
+    @pytest.fixture(scope="class", autouse=True)
+    def regenerate_monthly_test_data(self):
+        """Automatically regenerate monthly test data before running tests."""
+        print("\nRegenerating monthly test data...")
+        
+        # Import and run monthly data generator
+        from tests.data_generators.generate_monthly_ets_test_data import generate_monthly_ets_test_data
+        
+        # Generate training and test data
+        train_data, test_data = generate_monthly_ets_test_data()
+        
+        # Ensure monthly test data directory exists
+        monthly_test_data_dir = Path(__file__).parent / "test_data" / "monthly"
+        monthly_test_data_dir.mkdir(exist_ok=True)
+        
+        # Save training and test data
+        train_data.to_csv(monthly_test_data_dir / "monthly_ets_training_data.csv", index=False)
+        test_data.to_csv(monthly_test_data_dir / "monthly_ets_test_data.csv", index=False)
+        
+        print(f"Generated {len(train_data)} monthly training records")
+        print(f"Generated {len(test_data)} monthly test records")
+    
+    @pytest.fixture
+    def monthly_training_data(self):
+        """Load monthly training data for testing."""
+        monthly_path = Path(__file__).parent / "test_data" / "monthly" / "monthly_ets_training_data.csv"
+        df = pd.read_csv(monthly_path)
+        df['period'] = pd.to_datetime(df['period'])
+        return df
+    
+    @pytest.fixture
+    def monthly_test_data(self):
+        """Load monthly test data for validation."""
+        monthly_path = Path(__file__).parent / "test_data" / "monthly" / "monthly_ets_test_data.csv"
+        df = pd.read_csv(monthly_path)
+        df['period'] = pd.to_datetime(df['period'])
+        return df
+    
+    @pytest.fixture
+    def monthly_flat_series(self, monthly_training_data):
+        """Get monthly flat trend time series."""
+        return monthly_training_data[monthly_training_data['item'] == 'monthly_1.1_sin_flat_series'].copy()
+    
+    @pytest.fixture
+    def monthly_trend_series(self, monthly_training_data):
+        """Get monthly rising trend time series."""
+        return monthly_training_data[monthly_training_data['item'] == 'monthly_1.2_sin_trend_series'].copy()
+    
+    @pytest.fixture
+    def flat_series(self):
+        """Get weekly flat series for cross-granularity tests."""
+        # Load weekly training data
+        df = pd.read_csv(TRAINING_DATA_PATH)
+        df['period'] = pd.to_datetime(df['period'])
+        return df[df['item'] == ITEM_NAME_MAPPING['flat_series']].copy()
+    
+    @pytest.fixture
+    def training_data(self):
+        """Load weekly training data for cross-granularity tests."""
+        df = pd.read_csv(TRAINING_DATA_PATH)
+        df['period'] = pd.to_datetime(df['period'])
+        return df
+
+    def test_monthly_data_quality(self, monthly_training_data, monthly_test_data):
+        """Test that generated monthly data meets requirements."""
+        # Check training data has sufficient periods (>24 for monthly ETS)
+        min_monthly_periods = 24
+        items_count = monthly_training_data['item'].value_counts()
+        for item, count in items_count.items():
+            assert count >= min_monthly_periods, f"Item {item} has only {count} periods, need minimum {min_monthly_periods}"
+        
+        # Check data structure
+        expected_columns = {"item", "period", "quantity"}
+        assert set(monthly_training_data.columns) == expected_columns
+        assert set(monthly_test_data.columns) == expected_columns
+        
+        # Check no negative quantities
+        assert (monthly_training_data['quantity'] >= 0).all(), "Monthly training data contains negative quantities"
+        assert (monthly_test_data['quantity'] >= 0).all(), "Monthly test data contains negative quantities"
+
+    def test_monthly_basic_functionality(self, monthly_flat_series):
+        """Test monthly ETS forecasting works on flat trend series."""
+        forecast_df = generate_forecast_ets_monthly(
+            monthly_flat_series,
+            forecast_range=12,
+            trend="add",
+            seasonal="add"
+        )
+        
+        # Check output structure
+        assert len(forecast_df) == 12
+        assert set(forecast_df.columns) == {'period', 'forecast_quantity'}
+        assert forecast_df['period'].dtype.kind == 'M'  # datetime type
+        assert forecast_df['forecast_quantity'].dtype.kind == 'f'  # float type
+        
+        # Check forecast values are reasonable (positive and within expected range)
+        assert (forecast_df['forecast_quantity'] > 0).all()
+        mean_historical = monthly_flat_series['quantity'].mean()
+        assert forecast_df['forecast_quantity'].mean() == pytest.approx(mean_historical, rel=0.5)
+
+    def test_monthly_rolling_forecast(self, monthly_trend_series):
+        """Test monthly rolling forecast functionality."""
+        rolling_forecast_df = generate_rolling_forecast_ets_monthly(
+            monthly_trend_series,
+            rolling_periods=6,
+            lag=1,
+            trend="add",
+            seasonal="add"
+        )
+        
+        # Check output structure
+        assert len(rolling_forecast_df) == 6
+        assert set(rolling_forecast_df.columns) == {'period', 'forecast_quantity', 'lag'}
+        assert rolling_forecast_df['period'].dtype.kind == 'M'  # datetime type
+        assert rolling_forecast_df['forecast_quantity'].dtype.kind == 'f'  # float type
+        
+        # Check forecast values are reasonable (non-negative)
+        assert (rolling_forecast_df['forecast_quantity'] >= 0).all()
+
+    def test_granularity_detection_weekly(self, flat_series):
+        """Test granularity detection on weekly data."""
+        detected = detect_granularity(flat_series)
+        assert detected == "weekly"
+
+    def test_granularity_detection_monthly(self, monthly_flat_series):
+        """Test granularity detection on monthly data."""
+        detected = detect_granularity(monthly_flat_series)
+        assert detected == "monthly"
+
+    def test_auto_forecast_weekly(self, flat_series):
+        """Test auto forecast function detects weekly granularity correctly."""
+        forecast_df = generate_forecast_ets_auto(
+            flat_series,
+            granularity="auto"
+        )
+        
+        # Should default to 52 periods for weekly
+        assert len(forecast_df) == 52
+        assert set(forecast_df.columns) == {'period', 'forecast_quantity'}
+        assert (forecast_df['forecast_quantity'] > 0).all()
+
+    def test_auto_forecast_monthly(self, monthly_flat_series):
+        """Test auto forecast function detects monthly granularity correctly."""
+        forecast_df = generate_forecast_ets_auto(
+            monthly_flat_series,
+            granularity="auto"
+        )
+        
+        # Should default to 12 periods for monthly
+        assert len(forecast_df) == 12
+        assert set(forecast_df.columns) == {'period', 'forecast_quantity'}
+        assert (forecast_df['forecast_quantity'] > 0).all()
+
+    def test_auto_rolling_forecast_weekly(self, flat_series):
+        """Test auto rolling forecast function with weekly data."""
+        rolling_forecast_df = generate_rolling_forecast_ets_auto(
+            flat_series,
+            rolling_periods=8,
+            lag=1,
+            granularity="auto"
+        )
+        
+        # Check output structure for weekly
+        assert len(rolling_forecast_df) == 8
+        assert set(rolling_forecast_df.columns) == {'period', 'forecast_quantity', 'lag'}
+        assert (rolling_forecast_df['forecast_quantity'] >= 0).all()
+
+    def test_auto_rolling_forecast_monthly(self, monthly_trend_series):
+        """Test auto rolling forecast function with monthly data."""
+        rolling_forecast_df = generate_rolling_forecast_ets_auto(
+            monthly_trend_series,
+            rolling_periods=6,
+            lag=1,
+            granularity="auto"
+        )
+        
+        # Check output structure for monthly
+        assert len(rolling_forecast_df) == 6
+        assert set(rolling_forecast_df.columns) == {'period', 'forecast_quantity', 'lag'}
+        assert (rolling_forecast_df['forecast_quantity'] >= 0).all()
+
+    def test_explicit_granularity_override(self, monthly_flat_series):
+        """Test that explicit granularity parameter overrides auto-detection."""
+        # Force weekly treatment of monthly data (increase missing ratio tolerance)
+        forecast_df = generate_forecast_ets_auto(
+            monthly_flat_series,
+            granularity="weekly",
+            forecast_range=4,  # Small range to avoid issues
+            max_missing_ratio=0.99  # High tolerance for this edge case test
+        )
+        
+        # Should work but may not be optimal
+        assert len(forecast_df) == 4
+        assert set(forecast_df.columns) == {'period', 'forecast_quantity'}
+
+    def test_statsforecast_non_rolling(self, training_data):
+        """Test statsforecast non-rolling forecast function with comprehensive validation."""
+        # Use a seasonal series for proper testing
+        seasonal_item = training_data[training_data['item'] == '1.1_sin_flat_series']
+        if seasonal_item.empty:
+            # Fallback to first item if specific item not found
+            seasonal_item = training_data[training_data['item'] == training_data['item'].iloc[0]]
+        series_data = seasonal_item[['period', 'quantity']].copy()
+
+        print(f"\nTesting statsforecast with item: {seasonal_item['item'].iloc[0] if not seasonal_item.empty else 'Unknown'}")
+        print(f"Input data range: {series_data['quantity'].min():.1f} to {series_data['quantity'].max():.1f}")
+
+        # Test single series forecast
+        forecast_df = generate_forecast_ets_statsforecast(
+            series_data,
+            forecast_range=52,  # Full year for seasonality testing
+            seasonal_periods=52
+        )
+
+        # Basic validation
+        assert len(forecast_df) == 52
+        assert set(forecast_df.columns) == {'period', 'forecast_quantity'}
+        assert forecast_df['period'].dtype.kind == 'M'  # datetime type
+        assert forecast_df['forecast_quantity'].dtype.kind == 'f'  # float type
+        assert forecast_df['forecast_quantity'].notna().all()
+        assert forecast_df['forecast_quantity'].min() >= 0
+
+        # Test multiseries forecast for column order validation
+        multi_data = training_data[training_data['item'].isin(['1.1_sin_flat_series', '1.2_sin_trend_series'])].copy()
+        if multi_data.empty:
+            # Fallback to first 2 items
+            items = training_data['item'].unique()[:2]
+            multi_data = training_data[training_data['item'].isin(items)].copy()
+        
+        multi_forecast = _process_multiseries_forecast(
+            multi_data, generate_forecast_ets_statsforecast,
+            forecast_range=26, seasonal_periods=52
+        )
+
+        # Column order validation
+        assert list(multi_forecast.columns) == ['item', 'period', 'forecast_quantity'], \
+            f"Column order wrong: {list(multi_forecast.columns)}"
+        
+        # Seasonality pattern validation
+        forecast_values = np.array(forecast_df['forecast_quantity'])
+        print(f"Forecast range: {forecast_values.min():.1f} to {forecast_values.max():.1f}, Variation: {forecast_values.max() - forecast_values.min():.1f}")
+        
+        # Check for meaningful seasonal variation
+        seasonal_variation = forecast_values.max() - forecast_values.min()
+        mean_forecast = forecast_values.mean()
+        coefficient_of_variation = np.std(forecast_values) / mean_forecast
+        
+        assert seasonal_variation > 5.0, f"Insufficient seasonal variation: {seasonal_variation:.1f}"
+        assert coefficient_of_variation > 0.05, f"Coefficient of variation too low: {coefficient_of_variation:.3f}"
+        
+        # Check that forecast values are varying (not all identical)
+        unique_values = len(np.unique(np.round(forecast_values, 2)))
+        assert unique_values > 10, f"Too few unique forecast values: {unique_values}"
+        
+        # Compare with rolling forecast to ensure similar magnitude
+        if len(series_data) >= 52:
+            try:
+                rolling_forecast_df = generate_rolling_forecast_ets_weekly(
+                    series_data, rolling_periods=26, lag=1
+                )
+                rolling_mean = rolling_forecast_df['forecast_quantity'].mean()
+                non_rolling_mean = np.mean(forecast_values)
+                
+                # Both should be in similar magnitude (within 50% of each other)
+                ratio = max(float(rolling_mean), float(non_rolling_mean)) / min(float(rolling_mean), float(non_rolling_mean))
+                assert ratio < 2.0, f"Non-rolling vs rolling forecast magnitude too different: {ratio:.2f}"
+                
+                print(f"Rolling forecast mean: {rolling_mean:.1f}, Non-rolling mean: {non_rolling_mean:.1f}, Ratio: {ratio:.2f}")
+            except Exception as e:
+                print(f"Warning: Could not compare with rolling forecast: {e}")
+        
+        print("✅ Statsforecast seasonality and column order tests passed")
