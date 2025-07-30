@@ -1113,18 +1113,18 @@ def main():
     # MAIN EXECUTION
     # =================================================================
     
-    print("🚀 ETS Forecasting Pipeline")
+    print("ETS Forecasting Pipeline")
     print("=" * 60)
-    print(f"📊 Rolling Model: {MODEL.upper()}")
+    print(f"Rolling Model: {MODEL.upper()}")
     print(f"📁 Training Data: {TRAINING_DATA_PATH}")
     print(f"📁 Full Data: {FULL_DATA_PATH}")
-    print(f"🔄 Rolling Periods: {ROLLING_PERIODS}")
-    print(f"⏱️  Lag: {LAG}")
+    print(f"Rolling Periods: {ROLLING_PERIODS}")
+    print(f"Lag: {LAG}")
     print()
     
     try:
         # 1. Generate standard forecasts
-        print("🔮 Generating standard forecasts...")
+        print("    Generating standard forecasts...")
         print(f"   Loading training data: {TRAINING_DATA_PATH}")
         
         train_df = pd.read_csv(TRAINING_DATA_PATH)
@@ -1150,7 +1150,7 @@ def main():
             print(f"   ✓ Generated {len(standard_forecast)} forecast records")
         
         # 2. Generate rolling forecasts
-        print("\n🎯 Generating rolling forecasts...")
+        print("\n  Generating rolling forecasts...")
         print(f"   Loading full data: {FULL_DATA_PATH}")
         
         full_df = pd.read_csv(FULL_DATA_PATH)
